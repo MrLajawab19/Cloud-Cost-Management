@@ -1,6 +1,6 @@
 // src/pages/Recommendations.jsx — Cleanup recommendations page
 import { useState, useEffect } from 'react'
-import { Lightbulb, CheckCircle, Search, Filter } from 'lucide-react'
+import { Lightbulb, CheckCircle, Search, Filter, DollarSign } from 'lucide-react'
 import { recommendationsAPI } from '../api/client'
 
 export default function Recommendations() {
