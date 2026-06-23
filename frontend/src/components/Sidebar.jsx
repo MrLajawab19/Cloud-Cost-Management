@@ -1,54 +1,67 @@
-// src/components/Sidebar.jsx
-import { NavLink } from 'react-router-dom'
+// src/components/Sidebar.jsx — Premium sidebar with badges
+import { NavLink, useLocation } from 'react-router-dom'
+import { useState, useEffect } from 'react'
 import {
   LayoutDashboard, Server, DollarSign,
-  Lightbulb, TrendingUp, Cloud
+  Lightbulb, TrendingUp, CloudCog, ChevronRight
 } from 'lucide-react'
-import './Sidebar.css'
+import { recommendationsAPI } from '../api/client'
 
 const navItems = [
-  { to: '/',               icon: LayoutDashboard, label: 'Dashboard'       },
-  { to: '/resources',      icon: Server,          label: 'Resources'        },
-  { to: '/costs',          icon: DollarSign,      label: 'Cost Analysis'    },
-  { to: '/recommendations',icon: Lightbulb,       label: 'Recommendations'  },
-  { to: '/predictions',    icon: TrendingUp,      label: 'ML Predictions'   },
+  { to: '/',                icon: LayoutDashboard, label: 'Dashboard',       end: true  },
+  { to: '/resources',       icon: Server,          label: 'Resources'                   },
+  { to: '/costs',           icon: DollarSign,      label: 'Cost Analysis'               },
+  { to: '/recommendations', icon: Lightbulb,       label: 'Recommendations', badge: true },
+  { to: '/predictions',     icon: TrendingUp,      label: 'ML Predictions'              },
 ]
 
 export default function Sidebar() {
+  const location  = useLocation()
+  const [recCount, setRecCount] = useState(0)
+
+  useEffect(() => {
+    recommendationsAPI.summary()
+      .then(r => setRecCount(r.data.total_recommendations || 0))
+      .catch(() => {})
+  }, [])
+
   return (
     <aside className="sidebar">
-      {/* Logo */}
-      <div className="sidebar-logo">
-        <div className="logo-icon">
-          <Cloud size={20} color="white" />
+      {/* Brand */}
+      <div className="sidebar-brand">
+        <div className="brand-icon">
+          <CloudCog size={20} color="white" strokeWidth={1.8} />
         </div>
-        <div className="logo-text">
-          <span className="logo-title">CloudCost</span>
-          <span className="logo-sub">Management</span>
+        <div className="brand-text">
+          <div className="brand-name">CloudCost</div>
+          <div className="brand-sub">Management · v1.0</div>
         </div>
       </div>
 
-      {/* Navigation */}
+      {/* Nav */}
       <nav className="sidebar-nav">
-        <span className="nav-section-label">Navigation</span>
-        {navItems.map(({ to, icon: Icon, label }) => (
+        <div className="nav-group-label">Menu</div>
+        {navItems.map(({ to, icon: Icon, label, end, badge }) => (
           <NavLink
             key={to}
             to={to}
-            end={to === '/'}
-            className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+            end={end}
+            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
           >
-            <Icon className="nav-icon" size={18} />
+            <Icon className="nav-icon" strokeWidth={1.8} />
             {label}
+            {badge && recCount > 0 && (
+              <span className="nav-badge">{recCount}</span>
+            )}
           </NavLink>
         ))}
       </nav>
 
       {/* Footer */}
       <div className="sidebar-footer">
-        <div className="version-badge">
-          <span className="dot" />
-          v1.0.0 · Live
+        <div className="status-pill">
+          <span className="status-dot" />
+          All systems live
         </div>
       </div>
     </aside>

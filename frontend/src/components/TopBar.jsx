@@ -1,71 +1,79 @@
-// src/components/TopBar.jsx
+// src/components/TopBar.jsx — Refined top bar with health checks
 import { useState, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
-import { RefreshCw, Activity } from 'lucide-react'
-import { costsAPI, healthAPI } from '../api/client'
-import './TopBar.css'
+import { Bell, User, Settings, RefreshCw } from 'lucide-react'
+import { healthAPI, costsAPI } from '../api/client'
 
 const PAGE_TITLES = {
-  '/':               { title: 'Dashboard',         sub: 'Overview of your AWS cloud costs' },
-  '/resources':      { title: 'Resource Inventory', sub: 'All tracked cloud resources'       },
-  '/costs':          { title: 'Cost Analysis',      sub: 'Spending breakdown and trends'     },
-  '/recommendations':{ title: 'Recommendations',    sub: 'Cleanup and saving opportunities'  },
-  '/predictions':    { title: 'ML Predictions',     sub: '30-day cost forecast'              },
+  '/': { title: 'Overview', sub: 'Real-time AWS resource usage and cost estimates' },
+  '/resources': { title: 'Resource Inventory', sub: 'All tracked AWS resources across your account' },
+  '/costs': { title: 'Cost Analysis', sub: 'Breakdown of your AWS spending by service and over time' },
+  '/recommendations': { title: 'Recommendations', sub: 'Unused and underutilized resources flagged for review' },
+  '/predictions': { title: 'ML Predictions', sub: 'Machine learning forecast based on historical spending' },
 }
 
-export default function TopBar({ onRefresh }) {
-  const location  = useLocation()
-  const pageInfo  = PAGE_TITLES[location.pathname] || PAGE_TITLES['/']
+export default function TopBar() {
+  const location = useLocation()
+  const { title, sub } = PAGE_TITLES[location.pathname] || { title: 'Dashboard', sub: '' }
 
-  const [totalCost, setTotalCost] = useState(null)
-  const [demoMode,  setDemoMode]  = useState(false)
+  const [health, setHealth] = useState(null)
+  const [cost, setCost] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
 
-  useEffect(() => {
-    costsAPI.summary().then(r => setTotalCost(r.data.total_monthly_cost_usd)).catch(() => {})
-    healthAPI.check().then(r => setDemoMode(r.data.demo_mode)).catch(() => {})
-  }, [])
+  const loadData = async () => {
+    try {
+      const [h, c] = await Promise.all([healthAPI.check(), costsAPI.summary()])
+      setHealth(h.data)
+      setCost(c.data.total_monthly_cost_usd || 0)
+    } catch (e) {
+      console.error("TopBar data load failed:", e)
+    }
+  }
+
+  useEffect(() => { loadData() }, [])
 
   const handleRefresh = async () => {
     setRefreshing(true)
-    if (onRefresh) await onRefresh()
-    setTimeout(() => setRefreshing(false), 1000)
+    await loadData()
+    setTimeout(() => setRefreshing(false), 800)
   }
 
   return (
     <header className="topbar">
-      <div className="topbar-left">
-        <span className="topbar-title">{pageInfo.title}</span>
-        <span className="topbar-breadcrumb">{pageInfo.sub}</span>
+      <div className="topbar-breadcrumb">
+        <div className="topbar-page-title">{title}</div>
+        <div className="topbar-page-sub">{sub}</div>
       </div>
 
-      <div className="topbar-right">
-        {demoMode && (
-          <span className="mode-badge">DEMO MODE</span>
+      <div className="topbar-actions">
+        {health?.demo_mode && (
+          <div className="demo-badge">Demo Mode</div>
         )}
-
-        {totalCost !== null && (
-          <div className="topbar-stat">
-            <span className="stat-label">Est. Monthly</span>
-            <span className="stat-value cost">${totalCost.toFixed(2)}</span>
-          </div>
-        )}
-
-        <div className="topbar-stat">
-          <span className="stat-label">Status</span>
-          <span className="stat-value" style={{ fontSize: 13, color: 'var(--color-success)', display: 'flex', alignItems: 'center', gap: 4 }}>
-            <Activity size={12} /> Live
-          </span>
+        
+        <div className="topbar-metric" style={{ marginRight: 'var(--s-3)' }}>
+          <div className="topbar-metric-label">Est. Monthly</div>
+          <div className="topbar-metric-value">${cost.toFixed(2)}</div>
         </div>
 
-        <button
-          className={`refresh-btn ${refreshing ? 'refreshing' : ''}`}
+        <div className="topbar-divider" />
+
+        <button 
+          className={`icon-btn ${refreshing ? 'spinning' : ''}`} 
           onClick={handleRefresh}
-          title="Refresh data"
+          title="Refresh Data"
         >
-          <RefreshCw size={13} className="refresh-icon" />
-          Refresh
+          <RefreshCw size={15} />
         </button>
+        <button className="icon-btn">
+          <Bell size={15} />
+        </button>
+        <button className="icon-btn">
+          <Settings size={15} />
+        </button>
+        
+        <div style={{ marginLeft: 'var(--s-2)', width: 34, height: 34, borderRadius: 'var(--r-md)', background: 'var(--grad-main)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'var(--shadow-sm)', cursor: 'pointer' }}>
+          <User size={16} color="white" />
+        </div>
       </div>
     </header>
   )

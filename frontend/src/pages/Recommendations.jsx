@@ -1,15 +1,12 @@
 // src/pages/Recommendations.jsx — Cleanup recommendations page
 import { useState, useEffect } from 'react'
-import { Lightbulb, CheckCircle, RefreshCw, Filter } from 'lucide-react'
+import { Lightbulb, CheckCircle, Search, Filter } from 'lucide-react'
 import { recommendationsAPI } from '../api/client'
-
-const SEVERITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3 }
 
 export default function Recommendations() {
   const [recs,      setRecs]      = useState([])
   const [summary,   setSummary]   = useState(null)
   const [loading,   setLoading]   = useState(true)
-  const [refreshing,setRefreshing]= useState(false)
   const [filter,    setFilter]    = useState({ severity: '', service_type: '' })
 
   const load = async () => {
@@ -39,127 +36,144 @@ export default function Recommendations() {
     } catch (e) { console.error(e) }
   }
 
-  const handleRefresh = async () => {
-    setRefreshing(true)
-    try {
-      await recommendationsAPI.refresh()
-      await load()
-    } catch (e) { console.error(e) }
-    finally { setRefreshing(false) }
-  }
-
   useEffect(() => { load() }, [filter])
 
-  return (
-    <div className="page-content">
-      <h1 className="page-title">Cleanup Recommendations</h1>
-      <p className="page-subtitle">Unused and underutilized resources flagged for review</p>
+  if (loading && !summary) {
+    return (
+      <div className="page-content">
+        <div className="loading-wrap">
+          <div className="spinner" />
+          <div className="loading-text">Scanning for issues…</div>
+        </div>
+      </div>
+    )
+  }
 
+  return (
+    <div className="page-content animate-up">
       {/* Summary row */}
       {summary && (
-        <div className="summary-cards" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', marginBottom: 'var(--space-xl)' }}>
-          <div className="summary-card">
-            <div className="card-label">Total Issues</div>
-            <div className="card-value">{summary.total_recommendations}</div>
+        <div className="metric-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+          <div className="metric-card stagger-1">
+            <div className="metric-label">Total Issues</div>
+            <div className="metric-value">{summary.total_recommendations}</div>
+            <div className="metric-sub">Action items</div>
           </div>
-          <div className="summary-card">
-            <div className="card-label">Potential Savings</div>
-            <div className="card-value" style={{ color: 'var(--color-success)', fontSize: 22 }}>
-              ${(summary.total_potential_savings_usd || 0).toFixed(2)}/mo
+          <div className="metric-card stagger-2">
+            <div className="metric-label">Potential Savings</div>
+            <div className="metric-value" style={{ color: '#34d399' }}>
+              ${(summary.total_potential_savings_usd || 0).toFixed(2)}
             </div>
+            <div className="metric-sub">Monthly reduction</div>
           </div>
-          {Object.entries(summary.by_severity || {}).map(([sev, cnt]) => (
-            <div key={sev} className="summary-card">
-              <div className="card-label">Severity: {sev}</div>
-              <div className="card-value" style={{ fontSize: 22 }}>{cnt}</div>
-              <span className={`badge badge-${sev}`} style={{ marginTop: 4 }}>{sev}</span>
+          <div className="metric-card stagger-3">
+            <div className="metric-label">High Priority</div>
+            <div className="metric-value" style={{ color: '#ef4444' }}>
+              {summary.by_severity?.high || 0}
             </div>
-          ))}
+            <div className="metric-sub">Requires attention</div>
+          </div>
+          <div className="metric-card stagger-4">
+            <div className="metric-label">Quick Wins</div>
+            <div className="metric-value" style={{ color: '#60a5fa' }}>
+              {(summary.by_severity?.low || 0) + (summary.by_severity?.medium || 0)}
+            </div>
+            <div className="metric-sub">Low hanging fruit</div>
+          </div>
         </div>
       )}
 
-      {/* Filter + Refresh bar */}
-      <div className="filter-bar">
-        <Filter size={14} color="var(--text-muted)" />
-        <select
-          className="filter-select"
-          value={filter.severity}
-          onChange={e => setFilter(f => ({ ...f, severity: e.target.value }))}
-        >
-          <option value="">All Severities</option>
-          <option value="critical">Critical</option>
-          <option value="high">High</option>
-          <option value="medium">Medium</option>
-          <option value="low">Low</option>
-        </select>
-        <select
-          className="filter-select"
-          value={filter.service_type}
-          onChange={e => setFilter(f => ({ ...f, service_type: e.target.value }))}
-        >
-          <option value="">All Services</option>
-          <option value="EC2">EC2</option>
-          <option value="S3">S3</option>
-          <option value="RDS">RDS</option>
-          <option value="Lambda">Lambda</option>
-        </select>
-        <button
-          className={`btn btn-ghost btn-sm ${refreshing ? 'refreshing' : ''}`}
-          onClick={handleRefresh}
-          style={{ marginLeft: 'auto' }}
-        >
-          <RefreshCw size={12} style={{ animation: refreshing ? 'spin 0.8s linear infinite' : 'none' }} />
-          Re-scan
-        </button>
+      {/* Filter bar */}
+      <div className="filter-bar stagger-2">
+        <div className="filter-group">
+          <Filter size={14} color="var(--text-3)" />
+          <span className="filter-bar-label" style={{ marginLeft: 'var(--s-1)' }}>Filters</span>
+        </div>
+        <div className="topbar-divider" style={{ height: 20, margin: '0 var(--s-2)' }} />
+        
+        <div className="filter-group">
+          <select
+            className="select-input"
+            value={filter.severity}
+            onChange={e => setFilter(f => ({ ...f, severity: e.target.value }))}
+          >
+            <option value="">All Severities</option>
+            <option value="critical">Critical</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+        </div>
+        <div className="filter-group">
+          <select
+            className="select-input"
+            value={filter.service_type}
+            onChange={e => setFilter(f => ({ ...f, service_type: e.target.value }))}
+          >
+            <option value="">All Services</option>
+            <option value="EC2">EC2</option>
+            <option value="S3">S3</option>
+            <option value="RDS">RDS</option>
+            <option value="Lambda">Lambda</option>
+          </select>
+        </div>
       </div>
 
       {/* Recommendations list */}
-      {loading ? (
-        <div className="spinner-wrap"><div className="spinner" /><span>Loading recommendations…</span></div>
-      ) : recs.length === 0 ? (
-        <div className="card">
+      {recs.length === 0 ? (
+        <div className="card stagger-3">
           <div className="empty-state">
-            <CheckCircle size={40} color="var(--color-success)" />
-            <h3 style={{ color: 'var(--text-primary)', marginTop: 12 }}>All clear!</h3>
-            <p>No recommendations at this time.</p>
+            <div className="empty-icon" style={{ color: 'var(--color-success)', background: 'rgba(16,185,129,0.1)' }}>
+              <CheckCircle size={28} />
+            </div>
+            <div className="empty-title">All clear!</div>
+            <div className="empty-sub">Your cloud infrastructure is fully optimized. No recommendations at this time.</div>
           </div>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
-          {recs.map(rec => (
-            <div key={rec.id} className="rec-card animate-in">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: 'var(--s-5)' }}>
+          {recs.map((rec, i) => (
+            <div key={rec.id} className={`rec-card stagger-${(i % 4) + 1}`}>
               <div className="rec-card-header">
-                <div>
-                  <span className={`badge badge-${rec.severity}`} style={{ marginRight: 8 }}>
-                    {rec.severity}
-                  </span>
-                  <span className="rec-card-title">{rec.issue}</span>
+                <div className={`rec-severity-bar ${rec.severity}`} />
+                <div style={{ flex: 1 }}>
+                  <div className="rec-card-meta" style={{ marginBottom: 'var(--s-2)' }}>
+                    <span className={`badge badge-${rec.severity}`}>
+                      {rec.severity.toUpperCase()}
+                    </span>
+                    <span className={`chip chip-${rec.service_type.toLowerCase()}`}>
+                      {rec.service_type}
+                    </span>
+                    <span style={{ fontSize: 11, color: 'var(--text-4)' }}>{rec.region}</span>
+                  </div>
+                  <div className="rec-card-title">{rec.issue}</div>
                 </div>
-                <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                  {rec.service_type} · {rec.region}
-                </span>
               </div>
 
-              <div className="rec-card-desc">{rec.description}</div>
-
-              <div className="rec-card-action">
-                💡 <strong>Action:</strong> {rec.action}
+              <div className="rec-card-body">
+                <div className="rec-card-desc">{rec.description}</div>
+                <div className="rec-action-box" style={{ marginTop: 'var(--s-4)' }}>
+                  <strong>Action Plan:</strong> {rec.action}
+                </div>
               </div>
 
-              <div className="rec-card-footer">
+              <div className="rec-footer">
                 {rec.potential_savings_usd > 0 ? (
-                  <span className="savings-amount">
+                  <div className="savings-chip">
+                    <DollarSign size={14} />
                     Save ${rec.potential_savings_usd.toFixed(2)}/mo
-                  </span>
+                  </div>
                 ) : (
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>No direct cost</span>
+                  <div style={{ fontSize: 12, color: 'var(--text-4)' }}>
+                    Performance optimization (no direct cost)
+                  </div>
                 )}
                 <button
                   className="btn btn-success btn-sm"
                   onClick={() => handleResolve(rec.id)}
                 >
-                  <CheckCircle size={12} />
-                  Resolve
+                  <CheckCircle size={14} />
+                  Mark Resolved
                 </button>
               </div>
             </div>

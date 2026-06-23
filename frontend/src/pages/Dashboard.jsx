@@ -1,243 +1,253 @@
-// src/pages/Dashboard.jsx — Main dashboard with summary cards, charts, and tables
+// src/pages/Dashboard.jsx — Hero dashboard
 import { useState, useEffect } from 'react'
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, Legend
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
+  ResponsiveContainer, PieChart, Pie, Cell, Legend
 } from 'recharts'
-import {
-  DollarSign, Server, AlertTriangle, TrendingUp,
-  Zap, Package, Database, Cloud
-} from 'lucide-react'
+import { DollarSign, Server, AlertTriangle, TrendingUp, Cpu, HardDrive } from 'lucide-react'
 import { costsAPI, resourcesAPI, recommendationsAPI } from '../api/client'
 
-// ── Service colors ───────────────────────────────────────────────
 const SERVICE_COLORS = {
   EC2: '#f97316', S3: '#22c55e', RDS: '#3b82f6', Lambda: '#a78bfa',
 }
 
-// ── Custom Tooltip ───────────────────────────────────────────────
 const CustomTooltip = ({ active, payload, label }) => {
-  if (active && payload?.length) {
+  if (active && payload && payload.length) {
     return (
-      <div style={{
-        background: 'rgba(13,20,39,0.95)', border: '1px solid rgba(255,255,255,0.1)',
-        borderRadius: 8, padding: '10px 14px', fontSize: 12,
-      }}>
-        <p style={{ color: '#94a3b8', marginBottom: 4 }}>{label}</p>
-        <p style={{ color: '#6366f1', fontWeight: 700 }}>
-          ${(payload[0]?.value || 0).toFixed(4)}/day
-        </p>
+      <div className="chart-tooltip">
+        <div className="chart-tooltip-label">{label || payload[0].name}</div>
+        <div className="chart-tooltip-value">
+          ${Number(payload[0].value).toFixed(2)}
+        </div>
       </div>
-    )
+    );
   }
-  return null
-}
-
-// ── Summary Card ─────────────────────────────────────────────────
-function SummaryCard({ icon: Icon, label, value, sub, color, gradient }) {
-  return (
-    <div className="summary-card animate-in">
-      <div className="card-icon" style={{ background: gradient || 'rgba(99,102,241,0.15)' }}>
-        <Icon size={20} color={color || '#6366f1'} />
-      </div>
-      <div className="card-label">{label}</div>
-      <div className="card-value">{value}</div>
-      {sub && <div className="card-sub">{sub}</div>}
-    </div>
-  )
+  return null;
 }
 
 export default function Dashboard() {
-  const [summary,   setSummary]   = useState(null)
-  const [trend,     setTrend]     = useState([])
-  const [byService, setByService] = useState([])
-  const [topRes,    setTopRes]    = useState([])
-  const [recSummary,setRecSummary]= useState(null)
-  const [loading,   setLoading]   = useState(true)
+  const [loading, setLoading] = useState(true)
+  const [data, setData] = useState({
+    summary: null,
+    trend: [],
+    byService: [],
+    topResources: [],
+    recs: null
+  })
 
-  const loadData = async () => {
-    setLoading(true)
-    try {
-      const [s, t, bs, tr, rs] = await Promise.all([
-        costsAPI.summary(),
-        costsAPI.trend(30),
-        costsAPI.byService(),
-        costsAPI.topResources(6),
-        recommendationsAPI.summary(),
-      ])
-      setSummary(s.data)
-      setTrend(t.data.trend || [])
-      setByService(bs.data)
-      setTopRes(tr.data)
-      setRecSummary(rs.data)
-    } catch (e) {
-      console.error('Dashboard load error:', e)
-    } finally {
-      setLoading(false)
+  useEffect(() => {
+    async function load() {
+      try {
+        const [sum, tr, bs, top, rec] = await Promise.all([
+          costsAPI.summary(),
+          costsAPI.trend(30),
+          costsAPI.byService(),
+          costsAPI.topResources(),
+          recommendationsAPI.summary()
+        ])
+        setData({
+          summary: sum.data,
+          trend: tr.data.trend || [],
+          byService: bs.data,
+          topResources: top.data,
+          recs: rec.data
+        })
+      } catch (e) {
+        console.error(e)
+      } finally {
+        setLoading(false)
+      }
     }
-  }
-
-  useEffect(() => { loadData() }, [])
+    load()
+  }, [])
 
   if (loading) {
     return (
       <div className="page-content">
-        <div className="spinner-wrap" style={{ marginTop: 80 }}>
+        <div className="loading-wrap">
           <div className="spinner" />
-          <span>Loading dashboard…</span>
+          <div className="loading-text">Analyzing cloud metrics…</div>
         </div>
       </div>
     )
   }
 
+  const { summary, trend, byService, topResources, recs } = data
+
   return (
     <div className="page-content">
-      <h1 className="page-title">Cloud Cost Overview</h1>
-      <p className="page-subtitle">Real-time AWS resource usage and cost estimates</p>
-
-      {/* ── Summary Cards ──────────────────────────────────────── */}
-      <div className="summary-cards">
-        <SummaryCard
-          icon={DollarSign}
-          label="Est. Monthly Cost"
-          value={`$${(summary?.total_monthly_cost_usd || 0).toFixed(2)}`}
-          sub="Based on current usage"
-          color="#6366f1"
-          gradient="rgba(99,102,241,0.15)"
-        />
-        <SummaryCard
-          icon={Server}
-          label="Total Resources"
-          value={summary?.total_resources || 0}
-          sub={`${summary?.idle_resources || 0} idle`}
-          color="#06b6d4"
-          gradient="rgba(6,182,212,0.12)"
-        />
-        <SummaryCard
-          icon={TrendingUp}
-          label="Potential Savings"
-          value={`$${(summary?.potential_savings_usd || 0).toFixed(2)}/mo`}
-          sub="From idle resources"
-          color="#10b981"
-          gradient="rgba(16,185,129,0.12)"
-        />
-        <SummaryCard
-          icon={AlertTriangle}
-          label="Recommendations"
-          value={recSummary?.total_recommendations || 0}
-          sub={`$${(recSummary?.total_potential_savings_usd || 0).toFixed(2)} savings possible`}
-          color="#f59e0b"
-          gradient="rgba(245,158,11,0.12)"
-        />
-      </div>
-
-      {/* ── Cost Trend + Service Breakdown ─────────────────────── */}
-      <div className="grid-2" style={{ marginBottom: 'var(--space-lg)' }}>
-        {/* Cost Trend Line Chart */}
-        <div className="card">
-          <div className="section-header">
-            <span className="section-title">
-              <TrendingUp size={16} className="icon" />
-              Daily Cost Trend (30 days)
-            </span>
-          </div>
-          {trend.length > 0 ? (
-            <ResponsiveContainer width="100%" height={220}>
-              <LineChart data={trend} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                <XAxis
-                  dataKey="date"
-                  tick={{ fill: '#64748b', fontSize: 10 }}
-                  tickFormatter={v => v.slice(5)}
-                  interval="preserveStartEnd"
-                />
-                <YAxis
-                  tick={{ fill: '#64748b', fontSize: 10 }}
-                  tickFormatter={v => `$${v.toFixed(2)}`}
-                  width={55}
-                />
-                <Tooltip content={<CustomTooltip />} />
-                <Line
-                  type="monotone" dataKey="cost"
-                  stroke="#6366f1" strokeWidth={2.5}
-                  dot={false} activeDot={{ r: 5, fill: '#6366f1' }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="empty-state">
-              <TrendingUp size={32} color="var(--text-muted)" />
-              <p>No trend data yet. Data builds up over time.</p>
+      {/* Page Header is omitted since TopBar handles titles, but we can keep an optional intro or just go straight to content */}
+      
+      {/* Metric Cards */}
+      <div className="metric-grid">
+        <div className="metric-card animate-up stagger-1">
+          <div className="metric-card-glow" style={{ background: 'var(--brand-violet)' }} />
+          <div className="metric-top">
+            <div className="metric-icon" style={{ background: 'rgba(124,58,237,0.12)', color: '#a78bfa' }}>
+              <DollarSign size={20} />
             </div>
-          )}
+            <div className="metric-trend up">Live</div>
+          </div>
+          <div className="metric-label">Est. Monthly Cost</div>
+          <div className="metric-value">${summary?.total_monthly_cost_usd?.toFixed(2) || '0.00'}</div>
+          <div className="metric-sub">Based on current usage</div>
         </div>
 
-        {/* Cost by Service Pie Chart */}
-        <div className="card">
-          <div className="section-header">
-            <span className="section-title">
-              <Package size={16} className="icon" />
+        <div className="metric-card animate-up stagger-2">
+          <div className="metric-card-glow" style={{ background: 'var(--brand-blue)' }} />
+          <div className="metric-top">
+            <div className="metric-icon" style={{ background: 'rgba(59,130,246,0.12)', color: '#60a5fa' }}>
+              <Server size={20} />
+            </div>
+          </div>
+          <div className="metric-label">Total Resources</div>
+          <div className="metric-value">{summary?.total_resources || 0}</div>
+          <div className="metric-sub">{summary?.idle_resources || 0} idle</div>
+        </div>
+
+        <div className="metric-card animate-up stagger-3">
+          <div className="metric-card-glow" style={{ background: 'var(--color-success)' }} />
+          <div className="metric-top">
+            <div className="metric-icon" style={{ background: 'rgba(16,185,129,0.12)', color: '#34d399' }}>
+              <TrendingUp size={20} />
+            </div>
+            {summary?.potential_savings_usd > 0 && (
+              <div className="metric-trend up">+{(summary.potential_savings_usd / summary.total_monthly_cost_usd * 100).toFixed(1)}% possible</div>
+            )}
+          </div>
+          <div className="metric-label">Potential Savings</div>
+          <div className="metric-value" style={{ color: '#34d399' }}>
+            ${summary?.potential_savings_usd?.toFixed(2) || '0.00'}
+          </div>
+          <div className="metric-sub">From idle resources</div>
+        </div>
+
+        <div className="metric-card animate-up stagger-4">
+          <div className="metric-card-glow" style={{ background: 'var(--color-warning)' }} />
+          <div className="metric-top">
+            <div className="metric-icon" style={{ background: 'rgba(245,158,11,0.12)', color: '#fbbf24' }}>
+              <AlertTriangle size={20} />
+            </div>
+            {recs?.total_recommendations > 0 && (
+              <div className="metric-trend down">{recs.by_severity?.high || 0} high priority</div>
+            )}
+          </div>
+          <div className="metric-label">Recommendations</div>
+          <div className="metric-value" style={{ color: '#fbbf24' }}>{recs?.total_recommendations || 0}</div>
+          <div className="metric-sub">${recs?.total_potential_savings_usd?.toFixed(2) || '0.00'} savings possible</div>
+        </div>
+      </div>
+
+      <div className="grid-2-1">
+        {/* Trend Chart */}
+        <div className="card animate-up stagger-2">
+          <div className="card-header">
+            <div className="card-title">
+              <div className="card-title-icon"><TrendingUp size={16} /></div>
+              Daily Cost Trend (30 Days)
+            </div>
+          </div>
+          <div style={{ height: 260 }}>
+            {trend.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={trend} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#7c3aed" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#7c3aed" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                  <XAxis 
+                    dataKey="date" 
+                    tick={{ fill: '#64748b', fontSize: 11 }} 
+                    tickFormatter={v => v.slice(5)}
+                    axisLine={false}
+                    tickLine={false}
+                    dy={10}
+                  />
+                  <YAxis 
+                    tick={{ fill: '#64748b', fontSize: 11 }}
+                    tickFormatter={v => `$${v}`}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <RechartsTooltip content={<CustomTooltip />} />
+                  <Area 
+                    type="monotone" 
+                    dataKey="cost" 
+                    stroke="#7c3aed" 
+                    strokeWidth={3}
+                    fillOpacity={1} 
+                    fill="url(#trendGrad)" 
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="empty-state" style={{ padding: '40px 20px' }}>
+                <div className="empty-sub">Gathering trend data... (requires multiple days of history)</div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Pie Chart */}
+        <div className="card animate-up stagger-3">
+          <div className="card-header">
+            <div className="card-title">
+              <div className="card-title-icon" style={{ background: 'rgba(8,145,178,0.12)', color: '#0891b2' }}><Cpu size={16} /></div>
               Cost by Service
-            </span>
-          </div>
-          {byService.length > 0 ? (
-            <ResponsiveContainer width="100%" height={220}>
-              <PieChart>
-                <Pie
-                  data={byService}
-                  dataKey="total_cost_usd"
-                  nameKey="service"
-                  cx="50%" cy="50%"
-                  outerRadius={80}
-                  label={({ service, percent }) =>
-                    `${service} ${(percent * 100).toFixed(0)}%`
-                  }
-                  labelLine={false}
-                >
-                  {byService.map((entry) => (
-                    <Cell
-                      key={entry.service}
-                      fill={SERVICE_COLORS[entry.service] || '#6366f1'}
-                    />
-                  ))}
-                </Pie>
-                <Tooltip
-                  formatter={(v) => [`$${v.toFixed(2)}`, 'Monthly Cost']}
-                  contentStyle={{
-                    background: 'rgba(13,20,39,0.95)',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: 8, fontSize: 12,
-                  }}
-                />
-                <Legend
-                  iconType="circle"
-                  iconSize={8}
-                  formatter={(v) => <span style={{ color: '#94a3b8', fontSize: 12 }}>{v}</span>}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="empty-state">
-              <Package size={32} color="var(--text-muted)" />
-              <p>No cost data available.</p>
             </div>
-          )}
+          </div>
+          <div style={{ height: 260 }}>
+            {byService.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={byService}
+                    dataKey="total_cost_usd"
+                    nameKey="service"
+                    cx="50%"
+                    cy="45%"
+                    innerRadius={60}
+                    outerRadius={85}
+                    paddingAngle={3}
+                    stroke="none"
+                  >
+                    {byService.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={SERVICE_COLORS[entry.service] || '#6366f1'} />
+                    ))}
+                  </Pie>
+                  <RechartsTooltip content={<CustomTooltip />} />
+                  <Legend 
+                    wrapperStyle={{ fontSize: '11.5px', color: '#94a3b8' }} 
+                    iconType="circle"
+                    iconSize={8}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="empty-state" style={{ padding: '40px 20px' }}>
+                <div className="empty-sub">No service data available.</div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* ── Top Resources Table ─────────────────────────────────── */}
-      <div className="card">
-        <div className="section-header">
-          <span className="section-title">
-            <Zap size={16} className="icon" />
+      {/* Top Resources Table */}
+      <div className="card animate-up stagger-4" style={{ padding: 0 }}>
+        <div className="card-header" style={{ padding: 'var(--s-6) var(--s-6) 0' }}>
+          <div className="card-title">
+            <div className="card-title-icon" style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444' }}><HardDrive size={16} /></div>
             Top Resources by Cost
-          </span>
+          </div>
         </div>
-        <div className="data-table-wrap">
+        <div className="table-wrap" style={{ marginTop: 'var(--s-4)' }}>
           <table className="data-table">
             <thead>
               <tr>
-                <th>Resource</th>
+                <th>Resource Name</th>
                 <th>Service</th>
                 <th>Type</th>
                 <th>Region</th>
@@ -246,26 +256,29 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody>
-              {topRes.length === 0 ? (
-                <tr><td colSpan={6} style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)' }}>No data</td></tr>
-              ) : topRes.map((r) => (
+              {topResources.length > 0 ? topResources.slice(0, 5).map(r => (
                 <tr key={r.resource_id}>
-                  <td className="resource-name" title={r.resource_name}>{r.resource_name}</td>
-                  <td>
-                    <span style={{ color: SERVICE_COLORS[r.service_type] || '#6366f1', fontWeight: 600 }}>
-                      {r.service_type}
-                    </span>
+                  <td className="td-primary">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <span>{r.resource_name || r.resource_id}</span>
+                      <span className="td-mono">{r.resource_id}</span>
+                    </div>
                   </td>
-                  <td style={{ color: 'var(--text-muted)' }}>{r.resource_type || '—'}</td>
-                  <td style={{ color: 'var(--text-muted)' }}>{r.region}</td>
-                  <td>
-                    <span className={`badge badge-${r.status}`}>{r.status}</span>
-                  </td>
-                  <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--text-primary)' }}>
-                    ${r.monthly_cost.toFixed(2)}
+                  <td><span className={`chip chip-${r.service_type.toLowerCase()}`}>{r.service_type}</span></td>
+                  <td>{r.resource_type || '—'}</td>
+                  <td>{r.region}</td>
+                  <td><span className={`badge badge-${r.status.toLowerCase()}`}><span className="badge-dot" />{r.status}</span></td>
+                  <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--text-1)' }}>
+                    ${(r.estimated_monthly_cost || 0).toFixed(2)}
                   </td>
                 </tr>
-              ))}
+              )) : (
+                <tr>
+                  <td colSpan={6} style={{ textAlign: 'center', padding: 'var(--s-10)' }}>
+                    <div className="empty-sub" style={{ margin: '0 auto' }}>No resources tracked yet.</div>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

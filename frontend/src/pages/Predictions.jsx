@@ -2,15 +2,27 @@
 import { useState, useEffect } from 'react'
 import {
   ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, ReferenceLine, Legend
+  Tooltip as RechartsTooltip, ResponsiveContainer, ReferenceLine, Legend
 } from 'recharts'
-import { TrendingUp, Brain, Info } from 'lucide-react'
+import { TrendingUp, Brain, Info, Database } from 'lucide-react'
 import { predictionsAPI } from '../api/client'
 
-const TooltipStyle = {
-  background: 'rgba(13,20,39,0.95)',
-  border: '1px solid rgba(255,255,255,0.1)',
-  borderRadius: 8, fontSize: 12,
+const CustomTooltip = ({ active, payload, label }) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="chart-tooltip">
+        <div className="chart-tooltip-label">{label}</div>
+        {payload.map((entry, index) => (
+          <div key={`item-${index}`} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: entry.color }} />
+            <span style={{ color: 'var(--text-3)', fontSize: 11 }}>{entry.name === 'actual' ? 'Historical' : 'Forecast'}: </span>
+            <span style={{ color: 'var(--text-1)', fontWeight: 700 }}>${Number(entry.value).toFixed(4)}</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return null;
 }
 
 export default function Predictions() {
@@ -27,16 +39,20 @@ export default function Predictions() {
 
   if (loading) return (
     <div className="page-content">
-      <div className="spinner-wrap" style={{ marginTop: 80 }}>
+      <div className="loading-wrap">
         <div className="spinner" />
-        <span>Running ML model…</span>
+        <div className="loading-text">Running ML models on historical data…</div>
       </div>
     </div>
   )
 
   if (error) return (
     <div className="page-content">
-      <div className="card empty-state">{error}</div>
+      <div className="empty-state">
+        <div className="empty-icon"><Info size={24} /></div>
+        <div className="empty-title">Prediction Error</div>
+        <div className="empty-sub">{error}</div>
+      </div>
     </div>
   )
 
@@ -59,139 +75,163 @@ export default function Predictions() {
   const monthlyEstimate = data.monthly_estimate_usd
 
   return (
-    <div className="page-content">
-      <h1 className="page-title">ML Cost Predictions</h1>
-      <p className="page-subtitle">Machine learning forecast for the next 30 days based on historical spending</p>
-
+    <div className="page-content animate-up">
       {/* Model info cards */}
-      <div className="summary-cards" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', marginBottom: 'var(--space-xl)' }}>
-        <div className="summary-card">
-          <div className="card-label">30-Day Forecast Total</div>
-          <div className="card-value" style={{ color: '#6366f1' }}>
+      <div className="metric-grid">
+        <div className="metric-card stagger-1">
+          <div className="metric-card-glow" style={{ background: 'var(--brand-violet)' }} />
+          <div className="metric-top">
+            <div className="metric-icon" style={{ background: 'rgba(124,58,237,0.12)', color: '#a78bfa' }}>
+              <TrendingUp size={20} />
+            </div>
+            <div className="metric-trend neutral">30-Day Outlook</div>
+          </div>
+          <div className="metric-label">Predicted Total</div>
+          <div className="metric-value" style={{ color: '#c4b5fd' }}>
             ${(monthlyEstimate || 0).toFixed(2)}
           </div>
-          <div className="card-sub">Predicted next month</div>
+          <div className="metric-sub">Forecast for next month</div>
         </div>
-        <div className="summary-card">
-          <div className="card-label">Model Type</div>
-          <div className="card-value" style={{ fontSize: 14, marginTop: 8 }}>
+        
+        <div className="metric-card stagger-2">
+          <div className="metric-top">
+            <div className="metric-icon" style={{ background: 'rgba(59,130,246,0.12)', color: '#60a5fa' }}>
+              <Brain size={20} />
+            </div>
+          </div>
+          <div className="metric-label">Model Engine</div>
+          <div className="metric-value" style={{ fontSize: 22, marginTop: 4 }}>
             {model.type || 'N/A'}
           </div>
+          <div className="metric-sub">Machine learning algorithm</div>
         </div>
-        <div className="summary-card">
-          <div className="card-label">Training Days</div>
-          <div className="card-value">{model.training_days || 0}</div>
-          <div className="card-sub">Historical data points</div>
+        
+        <div className="metric-card stagger-3">
+          <div className="metric-top">
+            <div className="metric-icon" style={{ background: 'rgba(16,185,129,0.12)', color: '#34d399' }}>
+              <Database size={20} />
+            </div>
+          </div>
+          <div className="metric-label">Training Data</div>
+          <div className="metric-value">{model.training_days || 0}</div>
+          <div className="metric-sub">Historical data points used</div>
         </div>
+        
         {model.r2_score != null && (
-          <div className="summary-card">
-            <div className="card-label">R² Score</div>
-            <div className="card-value" style={{ color: model.r2_score > 0.8 ? 'var(--color-success)' : 'var(--color-warning)' }}>
+          <div className="metric-card stagger-4">
+            <div className="metric-top">
+              <div className="metric-icon" style={{ background: 'rgba(239,68,68,0.12)', color: '#f87171' }}>
+                <TrendingUp size={20} />
+              </div>
+            </div>
+            <div className="metric-label">Model Confidence (R²)</div>
+            <div className="metric-value" style={{ color: model.r2_score > 0.8 ? '#34d399' : '#fbbf24' }}>
               {(model.r2_score * 100).toFixed(1)}%
             </div>
-            <div className="card-sub">Model accuracy</div>
+            <div className="metric-sub">Accuracy score</div>
           </div>
         )}
       </div>
 
       {/* Note if not enough data */}
       {model.note && (
-        <div style={{
-          background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.25)',
-          borderRadius: 'var(--radius-md)', padding: 'var(--space-md)',
-          display: 'flex', gap: 'var(--space-sm)', alignItems: 'flex-start',
-          marginBottom: 'var(--space-lg)', fontSize: 13, color: 'var(--color-info)',
-        }}>
-          <Info size={16} style={{ flexShrink: 0, marginTop: 1 }} />
-          {model.note}
+        <div className="info-alert stagger-2">
+          <Info size={16} className="info-alert-icon" />
+          <div>{model.note}</div>
         </div>
       )}
 
-      {/* Combined Historical + Forecast Chart */}
-      <div className="card">
-        <div className="section-header">
-          <span className="section-title">
-            <Brain size={16} className="icon" />
-            Historical Spend + 30-Day Forecast
-          </span>
-        </div>
-        <ResponsiveContainer width="100%" height={350}>
-          <ComposedChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
-            <defs>
-              <linearGradient id="forecastGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%"  stopColor="#8b5cf6" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}   />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-            <XAxis
-              dataKey="date"
-              tick={{ fill: '#64748b', fontSize: 10 }}
-              tickFormatter={v => v.slice(5)}
-              interval={Math.floor(chartData.length / 8)}
-            />
-            <YAxis
-              tick={{ fill: '#64748b', fontSize: 10 }}
-              tickFormatter={v => `$${v.toFixed(3)}`}
-              width={65}
-            />
-            <Tooltip
-              formatter={(v, name) => [`$${(v || 0).toFixed(4)}`, name === 'actual' ? 'Historical' : 'Forecast']}
-              contentStyle={TooltipStyle}
-            />
-            <Legend
-              formatter={v => <span style={{ color: '#94a3b8', fontSize: 12 }}>
-                {v === 'actual' ? 'Historical' : 'ML Forecast'}
-              </span>}
-            />
-            <ReferenceLine x={today} stroke="rgba(255,255,255,0.2)" strokeDasharray="4 4" label={{ value: 'Today', fill: '#64748b', fontSize: 10 }} />
-            <Line
-              type="monotone" dataKey="actual"
-              stroke="#6366f1" strokeWidth={2.5}
-              dot={false} activeDot={{ r: 4 }}
-              connectNulls={false}
-            />
-            <Area
-              type="monotone" dataKey="forecast"
-              stroke="#8b5cf6" strokeWidth={2.5} strokeDasharray="6 3"
-              fill="url(#forecastGrad)"
-              dot={false}
-              connectNulls={false}
-            />
-          </ComposedChart>
-        </ResponsiveContainer>
-      </div>
-
-      {/* Forecast table */}
-      {data.forecast?.length > 0 && (
-        <div className="card" style={{ marginTop: 'var(--space-lg)' }}>
-          <div className="section-header">
-            <span className="section-title">Forecast Detail</span>
+      <div className="grid-2-1">
+        {/* Combined Historical + Forecast Chart */}
+        <div className="card stagger-3">
+          <div className="card-header">
+            <div className="card-title">
+              <div className="card-title-icon" style={{ background: 'rgba(124,58,237,0.12)', color: '#a78bfa' }}>
+                <Brain size={16} />
+              </div>
+              Spend Trajectory (Historical + Forecast)
+            </div>
           </div>
-          <div className="data-table-wrap" style={{ maxHeight: 300, overflowY: 'auto' }}>
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th style={{ textAlign: 'right' }}>Predicted Daily Cost</th>
-                  <th style={{ textAlign: 'right' }}>Predicted Monthly Rate</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.forecast.map(f => (
-                  <tr key={f.date}>
-                    <td style={{ color: 'var(--text-secondary)' }}>{f.date}</td>
-                    <td style={{ textAlign: 'right', fontWeight: 600 }}>${f.cost.toFixed(4)}</td>
-                    <td style={{ textAlign: 'right', color: 'var(--text-muted)' }}>
-                      ${(f.cost * 30).toFixed(2)}/mo
-                    </td>
+          <div style={{ height: 350 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="forecastGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%"  stopColor="#a78bfa" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#a78bfa" stopOpacity={0}   />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fill: '#64748b', fontSize: 11 }}
+                  tickFormatter={v => v.slice(5)}
+                  axisLine={false} tickLine={false} dy={10}
+                  interval={Math.floor(chartData.length / 8)}
+                />
+                <YAxis
+                  tick={{ fill: '#64748b', fontSize: 11 }}
+                  tickFormatter={v => `$${v.toFixed(2)}`}
+                  axisLine={false} tickLine={false} width={65}
+                />
+                <RechartsTooltip content={<CustomTooltip />} cursor={{ stroke: 'rgba(255,255,255,0.1)', strokeWidth: 1, strokeDasharray: '3 3' }} />
+                <Legend
+                  wrapperStyle={{ fontSize: '11.5px', color: '#94a3b8', paddingTop: 20 }}
+                  iconType="circle"
+                  iconSize={8}
+                />
+                <ReferenceLine x={today} stroke="rgba(124,58,237,0.5)" strokeDasharray="4 4" label={{ value: 'Today', fill: '#c4b5fd', fontSize: 10, position: 'insideTopLeft' }} />
+                
+                {/* Historical Line */}
+                <Line
+                  type="monotone" dataKey="actual" name="Historical Spend"
+                  stroke="#3b82f6" strokeWidth={3}
+                  dot={false} activeDot={{ r: 5, fill: '#3b82f6', stroke: '#080d1a', strokeWidth: 2 }}
+                  connectNulls={false}
+                />
+                
+                {/* Forecast Area */}
+                <Area
+                  type="monotone" dataKey="forecast" name="ML Forecast"
+                  stroke="#a78bfa" strokeWidth={2.5} strokeDasharray="6 4"
+                  fill="url(#forecastGrad)"
+                  dot={false} activeDot={{ r: 5, fill: '#a78bfa', stroke: '#080d1a', strokeWidth: 2 }}
+                  connectNulls={false}
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Forecast table */}
+        {data.forecast?.length > 0 && (
+          <div className="card stagger-4" style={{ padding: 0 }}>
+            <div className="card-header" style={{ padding: 'var(--s-6) var(--s-6) 0' }}>
+              <div className="card-title">Forecast Data Table</div>
+            </div>
+            <div className="table-wrap" style={{ maxHeight: 350, overflowY: 'auto', marginTop: 'var(--s-4)' }}>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th style={{ textAlign: 'right' }}>Daily Estimate</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {data.forecast.map(f => (
+                    <tr key={f.date}>
+                      <td style={{ color: 'var(--text-3)' }}>{f.date}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--text-1)' }}>
+                        ${f.cost.toFixed(4)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }
