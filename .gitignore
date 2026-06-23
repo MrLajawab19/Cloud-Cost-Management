@@ -1,0 +1,73 @@
+# ─── Environment & Secrets ──────────────────────────────────────
+.env
+*.env
+!.env.example
+
+# ─── Python ─────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+*.whl
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# ─── Virtual Environments ────────────────────────────────────────
+venv/
+env/
+ENV/
+.venv/
+.env/
+
+# ─── Node / Frontend ────────────────────────────────────────────
+node_modules/
+dist/
+.next/
+out/
+frontend/dist/
+frontend/.env
+
+# ─── Docker ─────────────────────────────────────────────────────
+docker-compose.override.yml
+
+# ─── Database ───────────────────────────────────────────────────
+*.sqlite3
+*.db
+pgdata/
+
+# ─── IDE & OS ───────────────────────────────────────────────────
+.vscode/
+.idea/
+*.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# ─── Logs ───────────────────────────────────────────────────────
+*.log
+logs/
+
+# ─── ML Models (keep only source, not binary artifacts) ─────────
+backend/models/*.pkl
+backend/models/*.joblib
+*.pkl
+*.joblib
