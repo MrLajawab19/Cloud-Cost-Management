@@ -1,28 +1,30 @@
 # ─── Web Framework ───────────────────────────────────────────────
-fastapi==0.111.0
-uvicorn[standard]==0.29.0
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
 
 # ─── Database ────────────────────────────────────────────────────
-sqlalchemy==2.0.30
-alembic==1.13.1
-psycopg2-binary==2.9.9
+sqlalchemy>=2.0.30
+alembic>=1.13.1
+# psycopg2-binary is only needed when using PostgreSQL (Docker/production)
+# For local SQLite dev, comment out the line below
+# psycopg2-binary==2.9.9
 
 # ─── AWS SDK ─────────────────────────────────────────────────────
-boto3==1.34.100
-botocore==1.34.100
+boto3>=1.34.100
+botocore>=1.34.100
 
 # ─── ML & Data ───────────────────────────────────────────────────
-scikit-learn==1.4.2
-pandas==2.2.2
-numpy==1.26.4
-joblib==1.4.0
+scikit-learn>=1.5.0
+pandas>=2.2.2
+numpy>=2.0.0
+joblib>=1.4.0
 
 # ─── Scheduler ───────────────────────────────────────────────────
-apscheduler==3.10.4
+apscheduler>=3.10.4
 
 # ─── Utilities ───────────────────────────────────────────────────
-python-dotenv==1.0.1
-pydantic==2.7.1
-pydantic-settings==2.2.1
-httpx==0.27.0
-python-multipart==0.0.9
+python-dotenv>=1.0.1
+pydantic>=2.7.1
+pydantic-settings>=2.2.1
+httpx>=0.27.0
+python-multipart>=0.0.9

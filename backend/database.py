@@ -1,6 +1,6 @@
 """
 database.py — SQLAlchemy engine, session factory, and Base declarative.
-All models import Base from here to ensure they are registered.
+Supports both SQLite (local dev, no install needed) and PostgreSQL (Docker/production).
 """
 
 from sqlalchemy import create_engine
@@ -9,12 +9,21 @@ from config import get_settings
 
 settings = get_settings()
 
-engine = create_engine(
-    settings.database_url,
-    pool_pre_ping=True,      # Detect stale connections
-    pool_size=10,
-    max_overflow=20,
-)
+# SQLite needs connect_args for thread safety; PostgreSQL uses connection pooling
+is_sqlite = settings.database_url.startswith("sqlite")
+
+if is_sqlite:
+    engine = create_engine(
+        settings.database_url,
+        connect_args={"check_same_thread": False},
+    )
+else:
+    engine = create_engine(
+        settings.database_url,
+        pool_pre_ping=True,
+        pool_size=10,
+        max_overflow=20,
+    )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

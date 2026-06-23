@@ -14,16 +14,18 @@ class Settings(BaseSettings):
     aws_default_region: str = "us-east-1"
 
     # ── Database ─────────────────────────────────────────────────
-    database_url: str = "postgresql://ccm_user:password@db:5432/cloud_cost_db"
+    database_url: str = "sqlite:///./cloud_cost.db"
 
     # ── App ──────────────────────────────────────────────────────
     demo_mode: bool = False          # True → use simulated data
     collection_interval_hours: int = 6
     secret_key: str = "change_me"
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
+    model_config = {
+        "env_file": ".env",
+        "case_sensitive": False,
+        "extra": "ignore",   # Silently ignore VITE_*, POSTGRES_*, etc.
+    }
 
 
 @lru_cache()
