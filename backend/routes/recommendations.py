@@ -16,9 +16,11 @@ router = APIRouter(prefix="/recommendations", tags=["Recommendations"])
 
 @router.get("/")
 def list_recommendations(
-    severity:     Optional[str] = Query(None, description="Filter: low|medium|high|critical"),
+    severity: Optional[str] = Query(
+        None, description="Filter: low|medium|high|critical"
+    ),
     service_type: Optional[str] = Query(None, description="Filter by service"),
-    resolved:     bool = Query(False, description="Include resolved recommendations"),
+    resolved: bool = Query(False, description="Include resolved recommendations"),
     db: Session = Depends(get_db),
 ):
     """
@@ -39,25 +41,27 @@ def list_recommendations(
     recs = query.all()
 
     # Sort: severity first, then by potential savings descending
-    recs.sort(key=lambda r: (
-        severity_order.get(r.severity, 99),
-        -r.potential_savings_usd,
-    ))
+    recs.sort(
+        key=lambda r: (
+            severity_order.get(r.severity, 99),
+            -r.potential_savings_usd,
+        )
+    )
 
     return [
         {
-            "id":            str(r.id),
-            "resource_id":   r.resource_id,
+            "id": str(r.id),
+            "resource_id": r.resource_id,
             "resource_name": r.resource_name,
-            "service_type":  r.service_type,
-            "region":        r.region,
-            "issue":         r.issue,
-            "description":   r.description,
-            "action":        r.action,
-            "severity":      r.severity,
+            "service_type": r.service_type,
+            "region": r.region,
+            "issue": r.issue,
+            "description": r.description,
+            "action": r.action,
+            "severity": r.severity,
             "potential_savings_usd": r.potential_savings_usd,
-            "is_resolved":   r.is_resolved,
-            "created_at":    r.created_at.isoformat() if r.created_at else None,
+            "is_resolved": r.is_resolved,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
         }
         for r in recs
     ]
@@ -89,9 +93,11 @@ def resolve_recommendation(recommendation_id: str, db: Session = Depends(get_db)
     from fastapi import HTTPException
     import uuid
 
-    rec = db.query(Recommendation).filter(
-        Recommendation.id == uuid.UUID(recommendation_id)
-    ).first()
+    rec = (
+        db.query(Recommendation)
+        .filter(Recommendation.id == uuid.UUID(recommendation_id))
+        .first()
+    )
 
     if not rec:
         raise HTTPException(status_code=404, detail="Recommendation not found")
@@ -103,7 +109,9 @@ def resolve_recommendation(recommendation_id: str, db: Session = Depends(get_db)
 
 
 @router.post("/refresh")
-def refresh_recommendations(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+def refresh_recommendations(
+    background_tasks: BackgroundTasks, db: Session = Depends(get_db)
+):
     """Trigger an on-demand re-scan for recommendations."""
     count = generate_recommendations(db)
     return {"message": f"Regenerated {count} recommendations"}

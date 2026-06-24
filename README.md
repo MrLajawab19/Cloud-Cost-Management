@@ -179,7 +179,7 @@ source venv/bin/activate   # macOS/Linux
 # Install dependencies
 pip install -r requirements.txt
 
-# Set DATABASE_URL in .env to point to your local PostgreSQL
+# IMPORTANT: Copy your .env file from the root directory into the backend/ directory.
 # Then start the API
 uvicorn main:app --reload --port 8000
 ```

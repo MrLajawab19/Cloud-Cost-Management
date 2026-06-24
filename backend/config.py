@@ -17,14 +17,14 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./cloud_cost.db"
 
     # ── App ──────────────────────────────────────────────────────
-    demo_mode: bool = False          # True → use simulated data
+    demo_mode: bool = False  # True → use simulated data
     collection_interval_hours: int = 6
     secret_key: str = "change_me"
 
     model_config = {
         "env_file": ".env",
         "case_sensitive": False,
-        "extra": "ignore",   # Silently ignore VITE_*, POSTGRES_*, etc.
+        "extra": "ignore",  # Silently ignore VITE_*, POSTGRES_*, etc.
     }
 
 

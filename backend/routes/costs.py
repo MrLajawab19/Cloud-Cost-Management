@@ -28,7 +28,7 @@ def cost_summary(db: Session = Depends(get_db)):
 @router.get("/trend")
 def cost_trend(
     days: int = Query(30, ge=7, le=365, description="Number of past days to include"),
-    db:   Session = Depends(get_db),
+    db: Session = Depends(get_db),
 ):
     """
     Returns daily aggregated cost totals for the past N days.
@@ -86,13 +86,13 @@ def top_resources_by_cost(
 
     return [
         {
-            "resource_id":   r.resource_id,
+            "resource_id": r.resource_id,
             "resource_name": r.resource_name or r.resource_id,
-            "service_type":  r.service_type,
-            "region":        r.region,
-            "status":        r.status,
+            "service_type": r.service_type,
+            "region": r.region,
+            "status": r.status,
             "resource_type": r.resource_type,
-            "monthly_cost":  round(r.estimated_monthly_cost or 0.0, 2),
+            "monthly_cost": round(r.estimated_monthly_cost or 0.0, 2),
         }
         for r in resources
     ]
