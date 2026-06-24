@@ -18,10 +18,10 @@ settings  = get_settings()
 scheduler = BackgroundScheduler(timezone="UTC")
 
 
-def run_collection_pipeline():
+def run_collection_pipeline(user_id=None, account_id=None):
     """
     Full pipeline:
-      1. Fetch resources from AWS (or demo data)
+      1. Fetch resources from AWS for targeted accounts (or all if none specified)
       2. Upsert into Resource table
       3. Record daily cost snapshot
       4. Regenerate recommendations
@@ -29,14 +29,46 @@ def run_collection_pipeline():
     logger.info("⏰ Scheduled collection pipeline started.")
     db = SessionLocal()
     try:
+        from models.account import AWSAccount
+        from services.security import decrypt_secret
+        
+        query = db.query(AWSAccount)
+        if user_id:
+            query = query.filter(AWSAccount.user_id == user_id)
+        if account_id:
+            query = query.filter(AWSAccount.id == account_id)
+            
+        accounts = query.all()
+        if not accounts and not settings.demo_mode:
+            logger.info("No AWS Accounts matching criteria. Skipping collection.")
+            return
+
+        all_resources = []
+        synced_account_ids = []
         if settings.demo_mode:
-            resources = aws_collector.collect_demo_data()
+            all_resources = aws_collector.collect_demo_data()
             logger.info("DEMO MODE: Using simulated AWS data.")
         else:
-            resources = aws_collector.collect_all()
+            for acc in accounts:
+                try:
+                    decrypted_secret = decrypt_secret(acc.encrypted_secret_key)
+                    resources = aws_collector.collect_all(
+                        access_key_id=acc.access_key_id,
+                        secret_access_key=decrypted_secret,
+                        region_name=acc.region,
+                        account_id=acc.id
+                    )
+                    all_resources.extend(resources)
+                    synced_account_ids.append(acc.id)
+                except Exception as e:
+                    logger.error(f"Failed to collect for account {acc.id}: {e}")
 
-        upsert_resources(db, resources)
-        record_daily_costs(db, resources)
+        # Upsert resources and delete stale ones for synced accounts
+        upsert_resources(db, all_resources, synced_account_ids)
+        
+        if all_resources:
+            record_daily_costs(db, all_resources)
+            
         generate_recommendations(db)
         logger.info("✅ Collection pipeline complete.")
     except Exception as e:

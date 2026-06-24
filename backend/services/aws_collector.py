@@ -44,12 +44,12 @@ LAMBDA_PRICE_PER_1M_REQ  = 0.20
 HOURS_IN_MONTH = 730
 
 
-def _get_boto3_session():
-    """Create a boto3 session using credentials from config."""
+def _get_boto3_session(access_key_id: str, secret_access_key: str, region_name: str):
+    """Create a boto3 session using provided credentials."""
     return boto3.Session(
-        aws_access_key_id=settings.aws_access_key_id or None,
-        aws_secret_access_key=settings.aws_secret_access_key or None,
-        region_name=settings.aws_default_region,
+        aws_access_key_id=access_key_id,
+        aws_secret_access_key=secret_access_key,
+        region_name=region_name,
     )
 
 
@@ -83,9 +83,8 @@ def _get_cloudwatch_metric(cw_client, namespace: str, metric_name: str,
 #  REAL AWS COLLECTORS
 # ══════════════════════════════════════════════════════════════════
 
-def collect_ec2_instances() -> List[Dict[str, Any]]:
+def collect_ec2_instances(session) -> List[Dict[str, Any]]:
     """Fetch all EC2 instances with state, type, uptime, and CPU metrics."""
-    session = _get_boto3_session()
     ec2 = session.client("ec2")
     cw  = session.client("cloudwatch")
     resources = []
@@ -100,7 +99,7 @@ def collect_ec2_instances() -> List[Dict[str, Any]]:
                     state         = inst["State"]["Name"]
                     launch_time   = inst.get("LaunchTime")
                     az            = inst.get("Placement", {}).get("AvailabilityZone", "")
-                    region        = az[:-1] if az else settings.aws_default_region
+                    region        = az[:-1] if az else session.region_name
 
                     # Name from tags
                     tags = {t["Key"]: t["Value"] for t in inst.get("Tags", [])}
@@ -144,9 +143,8 @@ def collect_ec2_instances() -> List[Dict[str, Any]]:
     return resources
 
 
-def collect_s3_buckets() -> List[Dict[str, Any]]:
+def collect_s3_buckets(session) -> List[Dict[str, Any]]:
     """Fetch all S3 buckets with size and request count metrics."""
-    session = _get_boto3_session()
     s3  = session.client("s3")
     cw  = session.client("cloudwatch")
     resources = []
@@ -162,7 +160,7 @@ def collect_s3_buckets() -> List[Dict[str, Any]]:
                 loc = s3.get_bucket_location(Bucket=name)
                 region = loc.get("LocationConstraint") or "us-east-1"
             except Exception:
-                region = settings.aws_default_region
+                region = session.region_name
 
             # Storage size (CloudWatch BucketSizeBytes, daily metric)
             size_gb = _get_cloudwatch_metric(
@@ -202,9 +200,8 @@ def collect_s3_buckets() -> List[Dict[str, Any]]:
     return resources
 
 
-def collect_rds_instances() -> List[Dict[str, Any]]:
+def collect_rds_instances(session) -> List[Dict[str, Any]]:
     """Fetch all RDS instances with state and cost estimate."""
-    session = _get_boto3_session()
     rds = session.client("rds")
     resources = []
 
@@ -217,7 +214,7 @@ def collect_rds_instances() -> List[Dict[str, Any]]:
                 engine   = inst.get("Engine", "unknown")
                 status   = inst.get("DBInstanceStatus", "unknown")
                 az       = inst.get("AvailabilityZone", "")
-                region   = az[:-1] if az else settings.aws_default_region
+                region   = az[:-1] if az else session.region_name
                 storage  = inst.get("AllocatedStorage", 0)
 
                 hourly = RDS_HOURLY_PRICE.get(db_class, 0.05)
@@ -242,9 +239,8 @@ def collect_rds_instances() -> List[Dict[str, Any]]:
     return resources
 
 
-def collect_lambda_functions() -> List[Dict[str, Any]]:
+def collect_lambda_functions(session) -> List[Dict[str, Any]]:
     """Fetch all Lambda functions with invocation counts and cost estimate."""
-    session = _get_boto3_session()
     lam = session.client("lambda")
     cw  = session.client("cloudwatch")
     resources = []
@@ -257,7 +253,7 @@ def collect_lambda_functions() -> List[Dict[str, Any]]:
                 fn_arn   = fn["FunctionArn"]
                 runtime  = fn.get("Runtime", "unknown")
                 memory   = fn.get("MemorySize", 128)      # MB
-                region   = settings.aws_default_region
+                region   = session.region_name
 
                 # Invocation count (30 days)
                 invocations = _get_cloudwatch_metric(
@@ -301,15 +297,21 @@ def collect_lambda_functions() -> List[Dict[str, Any]]:
     return resources
 
 
-def collect_all() -> List[Dict[str, Any]]:
-    """Run all collectors and return combined resource list."""
-    logger.info("Starting AWS resource collection…")
+def collect_all(access_key_id: str, secret_access_key: str, region_name: str, account_id: str) -> List[Dict[str, Any]]:
+    """Run all collectors and return combined resource list for an account."""
+    logger.info(f"Starting AWS resource collection for account {account_id}…")
+    session = _get_boto3_session(access_key_id, secret_access_key, region_name)
     all_resources = []
-    all_resources.extend(collect_ec2_instances())
-    all_resources.extend(collect_s3_buckets())
-    all_resources.extend(collect_rds_instances())
-    all_resources.extend(collect_lambda_functions())
-    logger.info(f"Collection complete. Total resources: {len(all_resources)}")
+    all_resources.extend(collect_ec2_instances(session))
+    all_resources.extend(collect_s3_buckets(session))
+    all_resources.extend(collect_rds_instances(session))
+    all_resources.extend(collect_lambda_functions(session))
+    
+    # Append account_id
+    for r in all_resources:
+        r["account_id"] = account_id
+
+    logger.info(f"Collection complete for account {account_id}. Total resources: {len(all_resources)}")
     return all_resources
 
 

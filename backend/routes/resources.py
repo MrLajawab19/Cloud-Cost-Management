@@ -4,15 +4,28 @@ Returns paginated list of cloud resources with filtering options.
 """
 
 from typing import Optional, List
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from datetime import datetime
 
 from database import get_db
 from models.resource import Resource
+from services.security import get_current_user
+from models.user import User
+from models.account import AWSAccount
 
 router = APIRouter(prefix="/resources", tags=["Resources"])
+
+
+def get_user_account_ids(db: Session, current_user: User, account_id: Optional[str] = None) -> List[str]:
+    if account_id:
+        acc = db.query(AWSAccount).filter(AWSAccount.id == account_id, AWSAccount.user_id == current_user.id).first()
+        if not acc:
+            raise HTTPException(status_code=403, detail="Account not found or access denied")
+        return [account_id]
+    accounts = db.query(AWSAccount).filter(AWSAccount.user_id == current_user.id).all()
+    return [acc.id for acc in accounts]
 
 
 # ── Response Schemas ─────────────────────────────────────────────
@@ -61,13 +74,19 @@ def list_resources(
     ),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
+    account_id: Optional[str] = Query(None, description="Filter by specific AWS account ID"),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
     Returns all tracked cloud resources.
     Supports filtering by service type, status, region, and idle flag.
     """
-    query = db.query(Resource)
+    account_ids = get_user_account_ids(db, current_user, account_id)
+    if not account_ids:
+        return {"total": 0, "resources": []}
+
+    query = db.query(Resource).filter(Resource.account_id.in_(account_ids))
 
     if service_type:
         query = query.filter(Resource.service_type == service_type)
@@ -90,12 +109,20 @@ def list_resources(
 
 
 @router.get("/summary")
-def resource_summary(db: Session = Depends(get_db)):
+def resource_summary(
+    account_id: Optional[str] = Query(None, description="Filter by specific AWS account ID"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """
     Returns a high-level count breakdown by service type and status.
     Used by the dashboard summary cards.
     """
-    resources = db.query(Resource).all()
+    account_ids = get_user_account_ids(db, current_user, account_id)
+    if not account_ids:
+        return {"total": 0, "by_service": {}, "by_status": {}, "idle_count": 0}
+
+    resources = db.query(Resource).filter(Resource.account_id.in_(account_ids)).all()
 
     by_service: dict = {}
     by_status: dict = {}
@@ -116,11 +143,15 @@ def resource_summary(db: Session = Depends(get_db)):
 
 
 @router.get("/{resource_id}", response_model=ResourceOut)
-def get_resource(resource_id: str, db: Session = Depends(get_db)):
+def get_resource(
+    resource_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """Get a single resource by its AWS resource ID."""
-    from fastapi import HTTPException
-
+    account_ids = get_user_account_ids(db, current_user)
+    
     resource = db.query(Resource).filter(Resource.resource_id == resource_id).first()
-    if not resource:
+    if not resource or resource.account_id not in account_ids:
         raise HTTPException(status_code=404, detail="Resource not found")
     return resource

@@ -18,7 +18,7 @@ from models.cost_record import CostRecord
 logger = logging.getLogger(__name__)
 
 
-def upsert_resources(db: Session, resources: List[Dict[str, Any]]) -> int:
+def upsert_resources(db: Session, resources: List[Dict[str, Any]], synced_account_ids: List[str] = None) -> int:
     """
     Insert or update Resource rows based on resource_id.
     Returns count of upserted records.
@@ -43,6 +43,21 @@ def upsert_resources(db: Session, resources: List[Dict[str, Any]]) -> int:
 
     db.commit()
     logger.info(f"Upserted {count} resources into DB.")
+
+    if synced_account_ids:
+        # Delete stale resources that belong to the synced accounts but were not found in AWS
+        fetched_resource_ids = {r["resource_id"] for r in resources}
+        
+        # Build query to find stale resources
+        stale_query = db.query(Resource).filter(Resource.account_id.in_(synced_account_ids))
+        if fetched_resource_ids:
+            stale_query = stale_query.filter(~Resource.resource_id.in_(fetched_resource_ids))
+            
+        stale_count = stale_query.delete(synchronize_session=False)
+        db.commit()
+        if stale_count > 0:
+            logger.info(f"Deleted {stale_count} stale resources from DB.")
+
     return count
 
 
@@ -68,6 +83,7 @@ def record_daily_costs(db: Session, resources: List[Dict[str, Any]]) -> int:
 
         if not exists:
             record = CostRecord(
+                account_id=r.get("account_id"),
                 resource_id=resource_id,
                 service_type=service_type,
                 region=region,
@@ -83,17 +99,21 @@ def record_daily_costs(db: Session, resources: List[Dict[str, Any]]) -> int:
     return count
 
 
-def get_cost_summary(db: Session) -> Dict[str, Any]:
+def get_cost_summary(db: Session, account_ids: List[str]) -> Dict[str, Any]:
     """
-    Compute a cost summary from the current resource table.
-    Returns:
-      - total_monthly_cost
-      - cost_by_service  { EC2: X, S3: X, RDS: X, Lambda: X }
-      - total_resources
-      - idle_resources
-      - potential_savings (sum of idle resource costs)
+    Compute a cost summary from the current resource table for specific accounts.
     """
-    resources = db.query(Resource).all()
+    if not account_ids:
+        return {
+            "total_monthly_cost_usd": 0.0,
+            "cost_by_service": {},
+            "total_resources": 0,
+            "idle_resources": 0,
+            "potential_savings_usd": 0.0,
+            "as_of": datetime.utcnow().isoformat(),
+        }
+
+    resources = db.query(Resource).filter(Resource.account_id.in_(account_ids)).all()
 
     total_cost = 0.0
     cost_by_service: Dict[str, float] = {}
@@ -119,13 +139,15 @@ def get_cost_summary(db: Session) -> Dict[str, Any]:
     }
 
 
-def get_daily_cost_trend(db: Session, days: int = 30) -> List[Dict[str, Any]]:
+def get_daily_cost_trend(db: Session, account_ids: List[str], days: int = 30) -> List[Dict[str, Any]]:
     """
-    Return aggregated daily cost totals for the past N days.
-    Used by the frontend cost trend chart.
+    Return aggregated daily cost totals for the past N days for specific accounts.
     """
     from sqlalchemy import func
     from datetime import timedelta
+
+    if not account_ids:
+        return []
 
     start_date = date.today() - timedelta(days=days)
 
@@ -134,6 +156,7 @@ def get_daily_cost_trend(db: Session, days: int = 30) -> List[Dict[str, Any]]:
             CostRecord.record_date,
             func.sum(CostRecord.daily_cost_usd).label("total_daily_cost"),
         )
+        .filter(CostRecord.account_id.in_(account_ids))
         .filter(CostRecord.record_date >= start_date)
         .group_by(CostRecord.record_date)
         .order_by(CostRecord.record_date)

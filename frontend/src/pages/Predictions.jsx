@@ -152,7 +152,7 @@ export default function Predictions() {
               Spend Trajectory (Historical + Forecast)
             </div>
           </div>
-          <div style={{ height: 350 }}>
+          <div style={{ height: 250 }}>
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                 <defs>
@@ -209,7 +209,7 @@ export default function Predictions() {
             <div className="card-header" style={{ padding: 'var(--s-6) var(--s-6) 0' }}>
               <div className="card-title">Forecast Data Table</div>
             </div>
-            <div className="table-wrap" style={{ maxHeight: 350, overflowY: 'auto', marginTop: 'var(--s-4)' }}>
+            <div className="table-wrap" style={{ maxHeight: 250, overflowY: 'auto', marginTop: 'var(--s-4)' }}>
               <table className="data-table">
                 <thead>
                   <tr>

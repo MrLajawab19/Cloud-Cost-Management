@@ -2,7 +2,7 @@
 
 import axios from 'axios'
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
 
 const api = axios.create({
   baseURL: BASE_URL,
@@ -10,7 +10,37 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 })
 
+// Request interceptor to attach token
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('access_token')
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  
+  const accountId = localStorage.getItem('active_account_id')
+  if (accountId && !config.url.startsWith('/auth')) {
+    // Attach account_id to params
+    config.params = { ...config.params, account_id: accountId }
+  }
+  return config
+}, (error) => {
+  return Promise.reject(error)
+})
+
 // ── API Methods ──────────────────────────────────────────────────
+
+export const authAPI = {
+  login:    (formData) => api.post('/auth/login', formData, { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }),
+  register: (data)     => api.post('/auth/register', data),
+  me:       ()         => api.get('/auth/me'),
+}
+
+export const accountsAPI = {
+  list:   ()     => api.get('/accounts/'),
+  create: (data) => api.post('/accounts/'),
+  delete: (id)   => api.delete(`/accounts/${id}`),
+  sync:   ()     => api.post('/accounts/sync'),
+}
 
 export const resourcesAPI = {
   list:    (params = {}) => api.get('/resources/', { params }),

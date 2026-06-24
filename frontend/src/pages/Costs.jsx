@@ -96,7 +96,7 @@ export default function Costs() {
               Monthly Cost by Service
             </div>
           </div>
-          <div style={{ height: 280 }}>
+          <div style={{ height: 200 }}>
             {byService.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={byService} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -143,7 +143,7 @@ export default function Costs() {
               </select>
             </div>
           </div>
-          <div style={{ height: 280 }}>
+          <div style={{ height: 200 }}>
             {trend.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={trend} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>

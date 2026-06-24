@@ -13,10 +13,9 @@ from database import engine, Base
 from scheduler import start_scheduler, stop_scheduler, run_collection_pipeline
 
 # Import all models so SQLAlchemy registers them before create_all
-import models.resource      # noqa: F401
-import models.cost_record   # noqa: F401
+import models  # Imports __init__.py which has User, AWSAccount, etc.
 
-from routes import resources, costs, recommendations, predictions
+from routes import resources, costs, recommendations, predictions, auth, accounts
 
 logging.basicConfig(
     level=logging.INFO,
@@ -76,6 +75,8 @@ app.add_middleware(
 )
 
 # ── Routes ───────────────────────────────────────────────────────
+app.include_router(auth.router)
+app.include_router(accounts.router)
 app.include_router(resources.router)
 app.include_router(costs.router)
 app.include_router(recommendations.router)

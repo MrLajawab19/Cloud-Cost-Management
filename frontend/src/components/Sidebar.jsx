@@ -1,9 +1,9 @@
-// src/components/Sidebar.jsx — Premium sidebar with badges
-import { NavLink, useLocation } from 'react-router-dom'
+// src/components/Sidebar.jsx
+import { NavLink } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import {
   LayoutDashboard, Server, DollarSign,
-  Lightbulb, TrendingUp, CloudCog, ChevronRight
+  Lightbulb, TrendingUp, X
 } from 'lucide-react'
 import { recommendationsAPI } from '../api/client'
 
@@ -15,8 +15,7 @@ const navItems = [
   { to: '/predictions',     icon: TrendingUp,      label: 'ML Predictions'              },
 ]
 
-export default function Sidebar() {
-  const location  = useLocation()
+export default function Sidebar({ isOpen, closeSidebar }) {
   const [recCount, setRecCount] = useState(0)
 
   useEffect(() => {
@@ -26,27 +25,24 @@ export default function Sidebar() {
   }, [])
 
   return (
-    <aside className="sidebar">
-      {/* Brand */}
-      <div className="sidebar-brand">
-        <div className="brand-icon">
-          <CloudCog size={20} color="white" strokeWidth={1.8} />
-        </div>
-        <div className="brand-text">
-          <div className="brand-name">CloudCost</div>
-          <div className="brand-sub">Management · v1.0</div>
-        </div>
+    <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
+      {/* Brand area used for a close button in mobile/drawer mode */}
+      <div className="sidebar-brand" style={{ display: 'flex', justifyContent: 'flex-end', padding: '10px' }}>
+        <button className="icon-btn" style={{ color: 'var(--text-1)' }} onClick={closeSidebar}>
+          <X size={20} />
+        </button>
       </div>
 
       {/* Nav */}
       <nav className="sidebar-nav">
-        <div className="nav-group-label">Menu</div>
+        <div className="nav-group-label" style={{ paddingLeft: '20px' }}>AWS Services</div>
         {navItems.map(({ to, icon: Icon, label, end, badge }) => (
           <NavLink
             key={to}
             to={to}
             end={end}
             className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+            style={{ paddingLeft: '20px' }}
           >
             <Icon className="nav-icon" strokeWidth={1.8} />
             {label}
@@ -61,7 +57,7 @@ export default function Sidebar() {
       <div className="sidebar-footer">
         <div className="status-pill">
           <span className="status-dot" />
-          All systems live
+          us-east-1
         </div>
       </div>
     </aside>

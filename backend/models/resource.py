@@ -4,7 +4,7 @@ Each row is a snapshot of a resource's state at collection time.
 """
 
 from datetime import datetime
-from sqlalchemy import Column, String, Float, Boolean, DateTime, Text, Enum
+from sqlalchemy import Column, String, Float, Boolean, DateTime, Text, Enum, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
 import enum
@@ -35,13 +35,13 @@ class Resource(Base):
     __tablename__ = "resources"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    account_id = Column(String(36), ForeignKey("aws_accounts.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # AWS identifiers
     resource_id   = Column(String(255), unique=True, nullable=False, index=True)
     resource_name = Column(String(255), nullable=True)
     service_type  = Column(String(50),  nullable=False, index=True)   # EC2 | S3 | RDS | Lambda
     region        = Column(String(50),  nullable=False)
-    account_id    = Column(String(20),  nullable=True)
 
     # State
     status        = Column(String(50),  default="unknown")

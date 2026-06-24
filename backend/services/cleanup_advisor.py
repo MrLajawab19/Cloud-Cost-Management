@@ -58,6 +58,7 @@ def generate_recommendations(db: Session) -> int:
             if r.status == "running" and (r.cpu_utilization_avg or 0) < 5.0 \
                     and (r.runtime_hours or 0) > 168:
                 recs.append(Recommendation(
+                    account_id=r.account_id,
                     resource_id=r.resource_id,
                     resource_name=r.resource_name or r.resource_id,
                     service_type="EC2",
@@ -80,6 +81,7 @@ def generate_recommendations(db: Session) -> int:
             if r.status == "stopped":
                 ebs_cost = 0.10 * 30  # estimate 30 GB EBS at $0.10/GB
                 recs.append(Recommendation(
+                    account_id=r.account_id,
                     resource_id=r.resource_id,
                     resource_name=r.resource_name or r.resource_id,
                     service_type="EC2",
@@ -102,6 +104,7 @@ def generate_recommendations(db: Session) -> int:
 
             if (r.storage_size_gb or 0) < 0.001 and (r.request_count or 0) == 0:
                 recs.append(Recommendation(
+                    account_id=r.account_id,
                     resource_id=r.resource_id,
                     resource_name=r.resource_name,
                     service_type="S3",
@@ -121,6 +124,7 @@ def generate_recommendations(db: Session) -> int:
 
             elif (r.storage_size_gb or 0) > 500 and (r.request_count or 0) == 0:
                 recs.append(Recommendation(
+                    account_id=r.account_id,
                     resource_id=r.resource_id,
                     resource_name=r.resource_name,
                     service_type="S3",
@@ -143,6 +147,7 @@ def generate_recommendations(db: Session) -> int:
 
             if r.status == "stopped":
                 recs.append(Recommendation(
+                    account_id=r.account_id,
                     resource_id=r.resource_id,
                     resource_name=r.resource_name,
                     service_type="RDS",
@@ -166,6 +171,7 @@ def generate_recommendations(db: Session) -> int:
 
             if (r.request_count or 0) == 0:
                 recs.append(Recommendation(
+                    account_id=r.account_id,
                     resource_id=r.resource_id,
                     resource_name=r.resource_name,
                     service_type="Lambda",

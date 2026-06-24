@@ -23,16 +23,20 @@ MIN_TRAINING_DAYS = 7    # Minimum days of data needed to train
 PREDICT_DAYS      = 30   # How many days ahead to predict
 
 
-def _load_training_data(db: Session) -> tuple:
+def _load_training_data(db: Session, account_ids: List[str]) -> tuple:
     """
-    Load aggregated daily cost totals from CostRecord table.
+    Load aggregated daily cost totals from CostRecord table for specific accounts.
     Returns (X: day indices, y: total cost per day, dates).
     """
+    if not account_ids:
+        return np.array([]), np.array([]), []
+
     rows = (
         db.query(
             CostRecord.record_date,
             func.sum(CostRecord.daily_cost_usd).label("total"),
         )
+        .filter(CostRecord.account_id.in_(account_ids))
         .group_by(CostRecord.record_date)
         .order_by(CostRecord.record_date)
         .all()
@@ -49,7 +53,7 @@ def _load_training_data(db: Session) -> tuple:
     return X, y, dates
 
 
-def predict_costs(db: Session) -> Dict[str, Any]:
+def predict_costs(db: Session, account_ids: List[str]) -> Dict[str, Any]:
     """
     Train a polynomial regression model on historical data and predict
     the next 30 days of daily costs.
@@ -63,7 +67,7 @@ def predict_costs(db: Session) -> Dict[str, Any]:
     from sklearn.preprocessing import PolynomialFeatures
     from sklearn.pipeline import make_pipeline
 
-    X, y, dates = _load_training_data(db)
+    X, y, dates = _load_training_data(db, account_ids)
 
     # ── Historical data (always returned) ────────────────────────
     historical = [
