@@ -757,6 +757,82 @@ body {
 .icon-btn.spinning svg {
   animation: spin 1s linear infinite;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   DARK MODE OVERRIDES
+═══════════════════════════════════════════════════════════════ */
+[data-theme='dark'] {
+  --bg-base:      #0f1115;
+  --bg-surface:   #161b22;
+  --bg-elevated:  #1c2128;
+
+  --glass-border: #30363d;
+  --glass-border-h: #8b949e;
+
+  --brand-aws-light: #161b22;
+
+  --text-1: #c9d1d9;
+  --text-2: #8b949e;
+  --text-3: #484f58;
+
+  --shadow-sm:   0 1px 1px rgba(0,0,0,0.5);
+  --shadow-md:   0 1px 3px rgba(0,0,0,0.6);
+}
+
+[data-theme='dark'] .sidebar,
+[data-theme='dark'] .dropdown-menu,
+[data-theme='dark'] .dropdown-header,
+[data-theme='dark'] .btn,
+[data-theme='dark'] .select-input {
+  background: var(--bg-surface);
+  color: var(--text-1);
+}
+
+[data-theme='dark'] .dropdown-item:hover,
+[data-theme='dark'] .btn:hover {
+  background: var(--bg-base);
+}
+
+[data-theme='dark'] .nav-item.active {
+  background: #1f2a36;
+}
+
+[data-theme='dark'] .data-table thead tr {
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--glass-border);
+}
+
+[data-theme='dark'] .data-table tbody tr:hover {
+  background: var(--bg-base);
+}
+
+[data-theme='dark'] .info-alert {
+  background: #1f2a36;
+  border-color: #30363d;
+}
+
+[data-theme='dark'] .rec-action-box {
+  background: #121d2f;
+}
+
+[data-theme='dark'] .page-content .card {
+  background: var(--bg-surface);
+  border-color: var(--glass-border);
+}
+
+[data-theme='dark'] .metric-card {
+  background: var(--bg-surface);
+  border-color: var(--glass-border);
+}
+
+[data-theme='dark'] .dropdown-header {
+  background: var(--bg-elevated);
+  border-color: var(--glass-border);
+}
+
+[data-theme='dark'] .dropdown-divider {
+  background: var(--glass-border);
+}
  / *   P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%
        D R O P D O W N   M E N U S   ( T o p B a r ) 
  P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%P%  * / 

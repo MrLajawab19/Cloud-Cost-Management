@@ -1,7 +1,7 @@
 // src/components/TopBar.jsx
 import { useState, useEffect, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
-import { Bell, User, Settings, RefreshCw, CloudCog, Menu, LogOut, ExternalLink, Globe, Plus, Database, Trash2 } from 'lucide-react'
+import { Bell, User, Settings, RefreshCw, CloudCog, Menu, LogOut, ExternalLink, Globe, Plus, Database, Trash2, Moon, Sun } from 'lucide-react'
 import { healthAPI, costsAPI, recommendationsAPI, accountsAPI } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
 import AddAccountModal from './AddAccountModal'
@@ -28,6 +28,20 @@ export default function TopBar({ toggleSidebar }) {
   // Dropdown states
   const [activeMenu, setActiveMenu] = useState(null) // 'settings', 'profile', 'notifications', 'account', or null
   const menuRef = useRef(null)
+
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    return localStorage.getItem('theme') === 'dark'
+  })
+
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.setAttribute('data-theme', 'dark')
+      localStorage.setItem('theme', 'dark')
+    } else {
+      document.documentElement.removeAttribute('data-theme')
+      localStorage.setItem('theme', 'light')
+    }
+  }, [isDarkMode])
 
   const loadData = async () => {
     if (!activeAccount) return;
@@ -203,6 +217,10 @@ export default function TopBar({ toggleSidebar }) {
             <div className="dropdown-menu dropdown-menu-right">
               <div className="dropdown-header" style={{ paddingBottom: 8 }}>
                 <div style={{ fontWeight: 700, fontSize: 14 }}>{user?.email || 'User'}</div>
+              </div>
+              <div className="dropdown-divider" />
+              <div className="dropdown-item" style={{ display: 'flex', alignItems: 'center', gap: 8 }} onClick={() => { setIsDarkMode(!isDarkMode); setActiveMenu(null); }}>
+                {isDarkMode ? <Sun size={14} /> : <Moon size={14} />} {isDarkMode ? 'Light Mode' : 'Night Mode'}
               </div>
               <div className="dropdown-divider" />
               <div className="dropdown-item" style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--color-danger)' }} onClick={logout}>
