@@ -5,17 +5,110 @@ Takes the raw resource list from aws_collector and:
   1. Saves/updates Resource rows in the database.
   2. Appends a daily CostRecord for each resource.
   3. Returns a cost summary dict.
+
+Also provides seed_historical_data() to backfill realistic cost history
+for accounts that have too few records for ML model training (FR-2).
 """
 
 import logging
-from datetime import date, datetime
-from typing import List, Dict, Any
+import math
+import random
+from datetime import date, datetime, timedelta
+from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from models.resource import Resource
 from models.cost_record import CostRecord
 
 logger = logging.getLogger(__name__)
+
+# ── Demo / seed constants ────────────────────────────────────────
+# Approximate daily cost profiles per service (USD/day).
+# These reflect realistic on-demand AWS spend for a small-medium workload.
+_SEED_SERVICE_PROFILES: Dict[str, Dict] = {
+    "EC2":    {"base_daily": 3.60,  "noise_pct": 0.08, "trend_per_day": 0.004},
+    "RDS":    {"base_daily": 4.67,  "noise_pct": 0.04, "trend_per_day": 0.002},
+    "S3":     {"base_daily": 0.94,  "noise_pct": 0.12, "trend_per_day": 0.001},
+    "Lambda": {"base_daily": 0.06,  "noise_pct": 0.25, "trend_per_day": 0.0},
+}
+
+
+def seed_historical_data(
+    db: Session,
+    account_id: str,
+    days: int = 45,
+    min_days_threshold: int = 10,
+) -> int:
+    """
+    Backfill realistic daily CostRecord entries for `account_id` if the
+    account has fewer than `min_days_threshold` distinct record_dates.
+
+    Idempotent: will not double-write records for dates that already exist.
+    Inserts one aggregate CostRecord per (service, date) for the past `days`.
+
+    Returns the number of new records inserted.
+    """
+    # Count existing distinct dates for this account
+    existing_dates = (
+        db.query(CostRecord.record_date)
+        .filter(CostRecord.account_id == account_id)
+        .distinct()
+        .count()
+    )
+
+    if existing_dates >= min_days_threshold:
+        logger.info(
+            "seed_historical_data: account %s already has %d days — skipping.",
+            account_id[:8], existing_dates,
+        )
+        return 0
+
+    # Fetch already-written dates so we don't duplicate
+    written_dates = {
+        r[0]
+        for r in db.query(CostRecord.record_date)
+        .filter(CostRecord.account_id == account_id)
+        .all()
+    }
+
+    today   = date.today()
+    rng     = random.Random(account_id)  # deterministic per-account seed
+    inserted = 0
+
+    for day_offset in range(days, 0, -1):
+        record_date = today - timedelta(days=day_offset)
+
+        for svc, profile in _SEED_SERVICE_PROFILES.items():
+            if record_date in written_dates:
+                continue  # skip already-present date for any service
+
+            # Trend + sine seasonality (7-day week pattern) + noise
+            t         = days - day_offset
+            trend     = profile["trend_per_day"] * t
+            seasonal  = 0.10 * profile["base_daily"] * math.sin(2 * math.pi * t / 7)
+            noise     = rng.gauss(0, profile["noise_pct"] * profile["base_daily"])
+            daily_cost = max(0.0, profile["base_daily"] + trend + seasonal + noise)
+
+            rec = CostRecord(
+                account_id    = account_id,
+                resource_id   = None,          # aggregate record, not per-resource
+                service_type  = svc,
+                region        = "seeded",
+                record_date   = record_date,
+                daily_cost_usd = round(daily_cost, 6),
+                monthly_estimate = round(daily_cost * 30, 4),
+            )
+            db.add(rec)
+            inserted += 1
+
+    if inserted:
+        db.commit()
+        logger.info(
+            "seed_historical_data: inserted %d records for account %s (%d days × %d services).",
+            inserted, account_id[:8], days, len(_SEED_SERVICE_PROFILES),
+        )
+    return inserted
 
 
 def upsert_resources(db: Session, resources: List[Dict[str, Any]], synced_account_ids: List[str] = None) -> int:

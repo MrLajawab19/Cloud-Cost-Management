@@ -10,7 +10,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from config import get_settings
 from database import SessionLocal
 from services import aws_collector
-from services.cost_estimator import upsert_resources, record_daily_costs
+from services.cost_estimator import upsert_resources, record_daily_costs, seed_historical_data
 from services.cleanup_advisor import generate_recommendations
 
 logger    = logging.getLogger(__name__)
@@ -65,7 +65,15 @@ def run_collection_pipeline(user_id=None, account_id=None):
 
         # Upsert resources and delete stale ones for synced accounts
         upsert_resources(db, all_resources, synced_account_ids)
-        
+
+        # Backfill history for any account that has < 10 days of cost records
+        # (ensures ML model comparison + per-service breakdown run on first use — FR-2)
+        target_account_ids = synced_account_ids if synced_account_ids else [
+            acc.id for acc in accounts
+        ]
+        for acc_id in target_account_ids:
+            seed_historical_data(db, acc_id, days=45, min_days_threshold=10)
+
         if all_resources:
             record_daily_costs(db, all_resources)
             

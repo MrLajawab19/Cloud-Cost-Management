@@ -63,7 +63,8 @@ export const recommendationsAPI = {
 }
 
 export const predictionsAPI = {
-  get: () => api.get('/predictions/'),
+  get:        () => api.get('/predictions/'),
+  perService: () => api.get('/predictions/per-service'),
 }
 
 export const healthAPI = {
