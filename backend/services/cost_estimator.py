@@ -91,13 +91,14 @@ def seed_historical_data(
             daily_cost = max(0.0, profile["base_daily"] + trend + seasonal + noise)
 
             rec = CostRecord(
-                account_id    = account_id,
-                resource_id   = None,          # aggregate record, not per-resource
-                service_type  = svc,
-                region        = "seeded",
-                record_date   = record_date,
-                daily_cost_usd = round(daily_cost, 6),
+                account_id       = account_id,
+                resource_id      = None,              # aggregate record, not per-resource
+                service_type     = svc,
+                region           = "seeded",
+                record_date      = record_date,
+                daily_cost_usd   = round(daily_cost, 6),
                 monthly_estimate = round(daily_cost * 30, 4),
+                source           = "synthetic_seed",  # always tag — never a real row
             )
             db.add(rec)
             inserted += 1
@@ -176,13 +177,14 @@ def record_daily_costs(db: Session, resources: List[Dict[str, Any]]) -> int:
 
         if not exists:
             record = CostRecord(
-                account_id=r.get("account_id"),
-                resource_id=resource_id,
-                service_type=service_type,
-                region=region,
-                record_date=today,
-                daily_cost_usd=round(daily_cost, 6),
-                monthly_estimate=r.get("estimated_monthly_cost", 0.0),
+                account_id       = r.get("account_id"),
+                resource_id      = resource_id,
+                service_type     = service_type,
+                region           = region,
+                record_date      = today,
+                daily_cost_usd   = round(daily_cost, 6),
+                monthly_estimate = r.get("estimated_monthly_cost", 0.0),
+                source           = "aws_collected",   # always tag — real AWS API data
             )
             db.add(record)
             count += 1

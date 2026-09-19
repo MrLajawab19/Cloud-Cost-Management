@@ -35,6 +35,12 @@ class CostRecord(Base):
     usage_quantity = Column(Float, nullable=True)
     usage_unit     = Column(String(50), nullable=True)   # e.g. "hours", "GB-Month"
 
+    # Origin tag — always set at insert time.
+    # 'synthetic_seed'  : written by seed_historical_data() for ML bootstrap data
+    # 'aws_collected'   : written by record_daily_costs() from a real AWS API call
+    # None              : legacy rows inserted before this column was added (pre-v2.1)
+    source = Column(String(50), nullable=True, index=True)
+
     created_at = Column(DateTime, default=datetime.utcnow)
 
     def __repr__(self):

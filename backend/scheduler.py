@@ -66,12 +66,27 @@ def run_collection_pipeline(user_id=None, account_id=None):
         # Upsert resources and delete stale ones for synced accounts
         upsert_resources(db, all_resources, synced_account_ids)
 
-        # Backfill history for any account that has < 10 days of cost records
-        # (ensures ML model comparison + per-service breakdown run on first use — FR-2)
-        target_account_ids = synced_account_ids if synced_account_ids else [
-            acc.id for acc in accounts
-        ]
-        for acc_id in target_account_ids:
+        # Backfill history only for accounts that have BOTH:
+        #   (a) demo_mode is True AND
+        #   (b) no real encrypted_secret_key (i.e., a true demo/sandbox account)
+        # Either condition failing skips seeding to prevent synthetic rows
+        # from being written into accounts that hold real AWS credentials. (FR-2)
+        target_accounts_map = {acc.id: acc for acc in accounts}
+        for acc_id in (synced_account_ids if synced_account_ids else [acc.id for acc in accounts]):
+            acc = target_accounts_map.get(acc_id)
+            has_real_creds = acc and acc.encrypted_secret_key and len(acc.encrypted_secret_key.strip()) > 0
+            if not settings.demo_mode:
+                logger.debug(
+                    "seed_historical_data: skipping account %s — demo_mode is False.", acc_id[:8]
+                )
+                continue
+            if has_real_creds:
+                logger.warning(
+                    "seed_historical_data: skipping account %s — demo_mode=True but real "
+                    "encrypted_secret_key is present. Will not seed a real-credential account.",
+                    acc_id[:8],
+                )
+                continue
             seed_historical_data(db, acc_id, days=45, min_days_threshold=10)
 
         if all_resources:
