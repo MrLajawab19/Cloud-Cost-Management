@@ -12,6 +12,7 @@ from database import SessionLocal
 from services import aws_collector
 from services.cost_estimator import upsert_resources, record_daily_costs, seed_historical_data
 from services.cleanup_advisor import generate_recommendations
+from services.anomaly_detector import detect_anomalies
 
 logger    = logging.getLogger(__name__)
 settings  = get_settings()
@@ -93,6 +94,14 @@ def run_collection_pipeline(user_id=None, account_id=None):
             record_daily_costs(db, all_resources)
             
         generate_recommendations(db)
+
+        # FR-3: detect cost anomalies for all synced accounts
+        detect_accounts = synced_account_ids if synced_account_ids else [
+            acc.id for acc in accounts
+        ]
+        if detect_accounts:
+            detect_anomalies(db, detect_accounts)
+
         logger.info("✅ Collection pipeline complete.")
     except Exception as e:
         logger.error(f"❌ Collection pipeline failed: {e}", exc_info=True)

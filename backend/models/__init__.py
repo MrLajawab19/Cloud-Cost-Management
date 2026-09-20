@@ -3,3 +3,4 @@ from .user import User
 from .account import AWSAccount
 from .resource import Resource
 from .cost_record import CostRecord, Recommendation
+from .anomaly import Anomaly

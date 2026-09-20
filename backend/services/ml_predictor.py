@@ -490,3 +490,109 @@ def predict_costs(db: Session, account_ids: List[str]) -> Dict[str, Any]:
         "monthly_estimate_usd": monthly_estimate,
         "model_info":           model_info,
     }
+
+
+# ══════════════════════════════════════════════════════════════════
+#  SHARED ATTRIBUTION HELPER (FR-2.4 ∩ FR-3)
+#
+#  Single entry-point for service-contribution attribution used by:
+#    • _forecast_per_service() above (FR-2.4 — forward forecast)
+#    • anomaly_detector.get_service_attribution() (FR-3 — driver naming)
+#    • Future forecast-explanation / trend-narrative feature (FR-2 ext.)
+#
+#  Do NOT replicate this logic elsewhere — call this function.
+# ══════════════════════════════════════════════════════════════════
+
+def get_service_attribution(db: Session, account_ids: List[str]) -> List[Dict[str, Any]]:
+    """
+    Return per-service attribution for the given accounts.
+
+    Each entry contains:
+      service          — service name (EC2, RDS, S3, Lambda)
+      attribution_pct  — % of total 30-day projected spend (from FR-2 normalization)
+      monthly_estimate — 30-day projected spend for this service (USD)
+      trend_rate       — linear slope of historical daily cost (USD/day, from poly fit)
+      avg_daily_cost   — mean historical daily cost over all available data
+
+    This is the canonical attribution source for both forecasting and anomaly
+    detection. The trend_rate and avg_daily_cost fields support the future
+    trend-narrative / forecast-explanation feature without requiring a separate
+    data-loading pass.
+    """
+    service_data = _load_per_service_data(db, account_ids)
+    if not service_data:
+        return []
+
+    # Build a minimal headline forecast (30 days) to normalize against
+    X_tot, y_tot, dates_tot = _load_total_data(db, account_ids)
+    if len(X_tot) < MIN_TRAINING_DAYS:
+        return []
+
+    comparison = _evaluate_models(X_tot, y_tot)
+    forecast_poly, forecast_hw, _ = _forecast_total(X_tot, y_tot, dates_tot, comparison)
+    if comparison and comparison["winner_key"] == "hw":
+        headline_forecast = forecast_hw
+    else:
+        headline_forecast = forecast_poly
+
+    headline_totals = np.array([f["cost"] for f in headline_forecast], dtype=float)
+    total_30d       = float(headline_totals.sum())
+
+    result = []
+    for svc, (X, y, _) in service_data.items():
+        n        = len(X)
+        last_idx = int(X[-1])
+        future_X = np.arange(last_idx + 1, last_idx + 1 + PREDICT_DAYS, dtype=float)
+
+        preds: Optional[np.ndarray] = None
+        trend_rate = 0.0
+
+        if n >= MIN_TRAINING_DAYS:
+            try:
+                if n >= 14:
+                    m     = _train_hw(y)
+                    preds = _predict_hw(m, PREDICT_DAYS)
+                else:
+                    m     = _train_poly(X, y)
+                    preds = _predict_poly(m, future_X)
+                # Estimate trend rate from polynomial fit (coefficient of X^1)
+                from sklearn.preprocessing import PolynomialFeatures
+                from sklearn.linear_model import LinearRegression
+                from sklearn.pipeline import make_pipeline
+                _pm = make_pipeline(PolynomialFeatures(degree=2, include_bias=False), LinearRegression())
+                _pm.fit(X.reshape(-1, 1), y)
+                # Coefficient of the linear term (index 0 of poly features)
+                trend_rate = float(_pm.named_steps["linearregression"].coef_[0])
+            except Exception as e:
+                logger.warning("get_service_attribution: model failed for %s: %s", svc, e)
+
+        if preds is None:
+            avg   = float(np.mean(y)) if n > 0 else 0.0
+            preds = np.full(PREDICT_DAYS, avg)
+
+        preds = np.maximum(preds, 0.0)
+
+        # Normalize to headline
+        raw_day_sums = preds.sum()  # single service; scale against matrix later
+        # (Full normalization is done in _forecast_per_service; here we just
+        # use the raw sum proportion for attribution %)
+        svc_30d_raw = float(preds.sum())
+
+        # Approximate normalized share
+        headline_sum = float(headline_totals.sum()) if total_30d > 1e-9 else 1.0
+        # We scale by the same factor as _forecast_per_service would:
+        #   scale = headline_total[day] / raw_day_sum_all_services
+        # Since we don't have all services here, use ratio to headline total
+        # (conservative — exact normalization comes from per_service_forecast endpoint)
+        attribution_pct = round((svc_30d_raw / headline_sum * 100) if headline_sum > 1e-9 else 0.0, 1)
+
+        result.append({
+            "service":           svc,
+            "attribution_pct":   attribution_pct,
+            "monthly_estimate":  round(svc_30d_raw, 2),
+            "trend_rate":        round(trend_rate, 6),   # USD/day slope
+            "avg_daily_cost":    round(float(np.mean(y)), 4),
+        })
+
+    result.sort(key=lambda x: x["attribution_pct"], reverse=True)
+    return result

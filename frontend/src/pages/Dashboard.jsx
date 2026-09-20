@@ -5,7 +5,8 @@ import {
   ResponsiveContainer, PieChart, Pie, Cell, Legend
 } from 'recharts'
 import { DollarSign, Server, AlertTriangle, TrendingUp, Cpu, HardDrive, ShieldAlert, CheckCircle } from 'lucide-react'
-import { costsAPI, recommendationsAPI } from '../api/client'
+import { costsAPI, recommendationsAPI, anomaliesAPI } from '../api/client'
+import { Link } from 'react-router-dom'
 
 const SERVICE_COLORS = {
   EC2: '#ec7211', S3: '#1d8102', RDS: '#0073bb', Lambda: '#6366f1',
@@ -33,19 +34,21 @@ export default function Dashboard() {
     byService: [],
     topResources: [],
     recsSummary: null,
-    recList: []
+    recList: [],
+    anomSummary: null,
   })
 
   useEffect(() => {
     async function load() {
       try {
-        const [sum, tr, bs, top, recSum, rList] = await Promise.all([
+        const [sum, tr, bs, top, recSum, rList, anomSum] = await Promise.all([
           costsAPI.summary(),
           costsAPI.trend(30),
           costsAPI.byService(),
           costsAPI.topResources(5),
           recommendationsAPI.summary(),
-          recommendationsAPI.list()
+          recommendationsAPI.list(),
+          anomaliesAPI.getSummary({ days: 30 }).catch(() => ({ data: null })),
         ])
         setData({
           summary: sum.data,
@@ -53,7 +56,8 @@ export default function Dashboard() {
           byService: bs.data,
           topResources: top.data,
           recsSummary: recSum.data,
-          recList: rList.data || []
+          recList: rList.data || [],
+          anomSummary: anomSum.data,
         })
       } catch (e) {
         console.error(e)
@@ -73,7 +77,7 @@ export default function Dashboard() {
     )
   }
 
-  const { summary, trend, byService, topResources, recsSummary, recList } = data
+  const { summary, trend, byService, topResources, recsSummary, recList, anomSummary } = data
   const highPriorityCount = (recsSummary?.by_severity?.critical || 0) + (recsSummary?.by_severity?.high || 0)
 
   return (
@@ -278,6 +282,42 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Anomaly Widget (FR-3.5) */}
+      {anomSummary && (
+        <div className="card" style={{ borderLeft: `3px solid ${anomSummary.critical_count > 0 ? '#f87171' : '#fbbf24'}` }}>
+          <div className="card-header">
+            <div className="card-title">
+              <AlertTriangle size={15} style={{ color: anomSummary.critical_count > 0 ? '#f87171' : '#fbbf24', marginRight: 6 }} />
+              Cost Anomalies (30d)
+            </div>
+            <Link to="/anomalies" style={{ fontSize: 11, color: 'var(--brand-aws-blue)', fontWeight: 600, marginLeft: 'auto', textDecoration: 'none' }}>
+              View all →
+            </Link>
+          </div>
+          <div style={{ display: 'flex', gap: 24, marginTop: 'var(--s-2)' }}>
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--text-3)' }}>Critical</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: '#f87171' }}>{anomSummary.critical_count}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--text-3)' }}>Warning</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: '#fbbf24' }}>{anomSummary.warning_count}</div>
+            </div>
+            {anomSummary.top_driver && (
+              <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
+                <div style={{ fontSize: 11, color: 'var(--text-3)' }}>Top Driver</div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-1)' }}>{anomSummary.top_driver}</div>
+              </div>
+            )}
+          </div>
+          {anomSummary.total === 0 && (
+            <div style={{ fontSize: 12, color: 'var(--color-success)', marginTop: 8, display: 'flex', alignItems: 'center', gap: 5 }}>
+              <CheckCircle size={13} /> All costs within ±2.5σ of forecast baseline
+            </div>
+          )}
+        </div>
+      )}
 
     </div>
   )

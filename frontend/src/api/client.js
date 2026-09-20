@@ -67,6 +67,13 @@ export const predictionsAPI = {
   perService: () => api.get('/predictions/per-service'),
 }
 
+export const anomaliesAPI = {
+  get:        (params = {}) => api.get('/anomalies/',        { params }),
+  getSummary: (params = {}) => api.get('/anomalies/summary', { params }),
+  resolve:    (id)          => api.post(`/anomalies/${id}/resolve`),
+  refresh:    ()            => api.post('/anomalies/refresh'),
+}
+
 export const healthAPI = {
   check: () => api.get('/health'),
 }
