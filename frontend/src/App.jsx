@@ -9,6 +9,7 @@ import Costs           from './pages/Costs'
 import Recommendations from './pages/Recommendations'
 import Predictions     from './pages/Predictions'
 import Anomalies       from './pages/Anomalies'
+import Simulations     from './pages/Simulations'
 import Login           from './pages/Login'
 import Register        from './pages/Register'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
@@ -38,6 +39,7 @@ function MainLayout() {
           <Route path="/recommendations" element={<Recommendations />} />
           <Route path="/predictions"     element={<Predictions />}     />
           <Route path="/anomalies"       element={<Anomalies />}       />
+          <Route path="/simulations"     element={<Simulations />}     />
         </Routes>
       </div>
     </div>

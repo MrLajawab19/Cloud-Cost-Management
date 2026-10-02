@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import {
   LayoutDashboard, Server, DollarSign,
-  Lightbulb, TrendingUp, AlertTriangle, X
+  Lightbulb, TrendingUp, AlertTriangle, FlaskConical, X
 } from 'lucide-react'
 import { recommendationsAPI, anomaliesAPI } from '../api/client'
 
@@ -14,6 +14,7 @@ const navItems = [
   { to: '/recommendations', icon: Lightbulb,       label: 'Recommendations', badge: 'rec' },
   { to: '/predictions',     icon: TrendingUp,      label: 'ML Predictions'              },
   { to: '/anomalies',       icon: AlertTriangle,   label: 'Anomalies',       badge: 'anom' },
+  { to: '/simulations',     icon: FlaskConical,    label: 'What-If'                     },
 ]
 
 export default function Sidebar({ isOpen, closeSidebar }) {

@@ -3,7 +3,7 @@ services/anomaly_detector.py
 ─────────────────────────────
 Implements FR-3 (Anomaly Detection) in full:
 
-  FR-3.1  Flag cost that deviates from the FR-2 forecast baseline
+  FR-3.1  Flag cost/usage that deviates from the FR-2 forecast baseline
   FR-3.2  Uses FR-2 forecast as the baseline; residuals derive the uncertainty band
   FR-3.3  Unsupervised detection: Z-score (primary) + IQR (secondary)
   FR-3.4  Cross-references FR-2.4 attribution to name the driver service
@@ -11,14 +11,22 @@ Implements FR-3 (Anomaly Detection) in full:
 
 Algorithm
 ─────────
-For each service independently:
+For each service independently, AND for the TOTAL daily cost aggregate:
   1. Load actual daily costs from cost_records (historical window)
-  2. Build per-service forecast using the same FR-2 Holt/Poly models
+  2. Build per-series in-sample forecast using the same FR-2 Holt/Poly models
   3. Compute residuals = actual − forecast on overlapping dates
   4. Rolling Z-score: z = residual / rolling_std (lookback=LOOKBACK_DAYS)
   5. IQR check: flag if residual > Q3 + 1.5*IQR  or  < Q1 − 1.5*IQR
   6. Keep only |z| ≥ Z_THRESHOLD (2.5) → 'warning' or 'critical'
   7. Attach driver_service from get_service_attribution() — shared with FR-2.4
+  service_type='TOTAL' rows capture account-level anomalies not tied to one service.
+
+⚠️  Synthetic data caveat
+──────────────────────
+180 of this account's cost records are synthetic seed data (region='seeded',
+source='synthetic_seed'), not live AWS billing data. Anomaly counts and z-scores
+are measured against that seed distribution. Real-world false-positive rates
+will differ once the account accumulates sufficient live AWS billing history.
 
 Resolution contract (Point 2, user-confirmed)
 ─────────────────────────────────────────────
@@ -39,6 +47,7 @@ from models.cost_record import CostRecord
 from models.anomaly import Anomaly
 from services.ml_predictor import (
     _load_per_service_data,
+    _load_total_data,           # used for TOTAL-level detection
     _train_hw, _predict_hw,
     _train_poly, _predict_poly,
     get_service_attribution,
@@ -52,6 +61,34 @@ Z_THRESHOLD      = 2.5   # |z| below this → not anomalous, row NOT stored
 Z_CRITICAL       = 3.5   # |z| above this → 'critical'; between → 'warning'
 LOOKBACK_DAYS    = 14    # rolling window for mean/std computation
 MIN_RESIDUALS    = 7     # minimum residual points needed to compute reliable stats
+
+
+# ── Internal: shared model fitter ────────────────────────────────
+
+def _compute_fitted(X: np.ndarray, y: np.ndarray, n: int) -> np.ndarray:
+    """
+    Compute in-sample fitted values using the same model selection as FR-2:
+      n >= 14 → Holt's Double Exponential Smoothing (in-sample smoothed)
+      n <  14 → Polynomial Regression degree-2
+
+    Returns fitted values array of length n, all non-negative.
+    """
+    if n >= 14:
+        model   = _train_hw(y)
+        lvl     = float(y[0])
+        trend_v = float(y[1] - y[0]) if n > 1 else 0.0
+        fitted_vals = []
+        for t in range(n):
+            fitted_vals.append(lvl + trend_v)
+            if t < n - 1:
+                prev_lvl    = lvl
+                prev_trend  = trend_v
+                lvl     = model.alpha * float(y[t]) + (1 - model.alpha) * (prev_lvl + prev_trend)
+                trend_v = model.beta  * (lvl - prev_lvl) + (1 - model.beta) * prev_trend
+        return np.maximum(np.array(fitted_vals), 0.0)
+    else:
+        m = _train_poly(X, y)
+        return np.maximum(m.predict(X.reshape(-1, 1)), 0.0)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -75,27 +112,8 @@ def _build_residuals(
             logger.debug("_build_residuals: %s has only %d days — skipping.", svc, n)
             continue
 
-        # Use the same model selection logic as FR-2 per-service
         try:
-            if n >= 14:
-                model  = _train_hw(y)
-                fitted = model.forecast(n)   # in-sample forecast for all points
-                # Holt's in-sample: iterate manually to get per-step one-ahead predictions
-                # (re-run smoothing to get fitted values for residual computation)
-                lvl   = float(y[0])
-                trend_v = float(y[1] - y[0]) if n > 1 else 0.0
-                fitted_vals = []
-                for t in range(n):
-                    fitted_vals.append(lvl + trend_v)
-                    if t < n - 1:
-                        prev_lvl   = lvl
-                        prev_trend = trend_v
-                        lvl   = model.alpha * float(y[t]) + (1 - model.alpha) * (prev_lvl + prev_trend)
-                        trend_v = model.beta  * (lvl - prev_lvl) + (1 - model.beta) * prev_trend
-                fitted_arr = np.maximum(np.array(fitted_vals), 0.0)
-            else:
-                m          = _train_poly(X, y)
-                fitted_arr = np.maximum(m.predict(X.reshape(-1, 1)), 0.0)
+            fitted_arr = _compute_fitted(X, y, n)
         except Exception as e:
             logger.warning("_build_residuals: model failed for %s: %s", svc, e)
             continue
@@ -107,6 +125,28 @@ def _build_residuals(
         service_residuals[svc] = residuals
 
     return service_residuals
+
+
+def _build_total_residuals(
+    X_tot: np.ndarray,
+    y_tot: np.ndarray,
+    dates_tot: list,
+) -> Dict[date, float]:
+    """
+    Build residuals for the TOTAL daily cost series (service_type='TOTAL').
+    Used for account-level anomaly detection not tied to any specific service.
+    Same model selection as FR-2: Holt-DES if n≥14, poly otherwise.
+    """
+    n = len(X_tot)
+    if n < MIN_TRAINING_DAYS:
+        return {}
+    try:
+        fitted_arr = _compute_fitted(X_tot, y_tot, n)
+    except Exception as e:
+        logger.warning("_build_total_residuals failed: %s", e)
+        return {}
+
+    return {d: float(y_tot[i]) - float(fitted_arr[i]) for i, d in enumerate(dates_tot)}
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -292,11 +332,39 @@ def detect_anomalies(db: Session, account_ids: List[str]) -> Dict[str, int]:
             totals[account_id] = 0
             continue
 
-        # ── 3. Detect ────────────────────────────────────────────
+        # ── 3. Detect per-service ────────────────────────────────
+        # Build cost lookup maps here — needed by both per-service and TOTAL steps.
+        actual_cost_map:   Dict[Tuple[str, date], float] = {}
+        forecast_cost_map: Dict[Tuple[str, date], float] = {}
+
         all_detections: List[Dict[str, Any]] = []
         for svc, residuals in service_residuals.items():
             dets = _detect_for_service(svc, residuals)
             all_detections.extend(dets)
+
+        # Populate per-service cost maps
+        for svc, (X, y, dates) in service_data.items():
+            for i, d in enumerate(dates):
+                actual_cost_map[(svc, d)] = float(y[i])
+        for svc, residuals in service_residuals.items():
+            for d, resid in residuals.items():
+                forecast_cost_map[(svc, d)] = actual_cost_map.get((svc, d), 0.0) - resid
+
+        # ── 3b. Detect TOTAL (account-level aggregate) ───────────
+        # Flags days where the account's total daily cost deviated from the
+        # headline forecast regardless of which service caused it.
+        # service_type='TOTAL', driver_service = highest-raw-rank service.
+        X_tot, y_tot, dates_tot = _load_total_data(db, [account_id])
+        if len(X_tot) >= MIN_TRAINING_DAYS:
+            total_residuals = _build_total_residuals(X_tot, y_tot, dates_tot)
+            total_dets      = _detect_for_service("TOTAL", total_residuals)
+            all_detections.extend(total_dets)
+            for i, d in enumerate(dates_tot):
+                actual_cost_map[("TOTAL", d)]   = float(y_tot[i])
+                resid = total_residuals.get(d, 0.0)
+                forecast_cost_map[("TOTAL", d)] = float(y_tot[i]) - resid
+        else:
+            logger.debug("FR-3 TOTAL detection skipped for %s — insufficient data.", account_id[:8])
 
         if not all_detections:
             logger.info("FR-3: no anomalies above threshold for account %s.", account_id[:8])
@@ -305,28 +373,14 @@ def detect_anomalies(db: Session, account_ids: List[str]) -> Dict[str, int]:
 
         # ── 4. Driver attribution (shared with FR-2.4) ───────────
         attribution = get_service_attribution(db, [account_id])
-        # Map: service → driver (highest-attribution service for multi-service cases)
-        # For per-service anomalies: driver IS the service itself (single-service spike)
+        # For per-service anomalies: driver IS the anomalous service itself.
+        # get_service_attribution() returns raw_attribution_pct (un-normalized,
+        # may exceed 100%) — used only for ranking, not user-facing display.
         driver_map: Dict[str, str] = {a["service"]: a["service"] for a in attribution}
-        # Top attributor for TOTAL anomalies (if added in future)
         top_driver = attribution[0]["service"] if attribution else "Unknown"
-        driver_map["TOTAL"] = top_driver
+        driver_map["TOTAL"] = top_driver   # TOTAL anomaly → highest-raw-rank service
 
-        # ── 5. Build lookup maps for actual/forecast costs ───────
-        actual_cost_map: Dict[Tuple[str, date], float] = {}
-        forecast_cost_map: Dict[Tuple[str, date], float] = {}
-
-        for svc, (X, y, dates) in service_data.items():
-            for i, d in enumerate(dates):
-                actual_cost_map[(svc, d)] = float(y[i])
-
-        # Forecast cost = actual − residual (residual already computed above)
-        for svc, residuals in service_residuals.items():
-            for d, resid in residuals.items():
-                act = actual_cost_map.get((svc, d), 0.0)
-                forecast_cost_map[(svc, d)] = act - resid
-
-        # ── 6. Upsert with resolution protection ─────────────────
+        # ── 5. Upsert with resolution protection ─────────────────
         ins, upd, skp = _upsert_anomalies(
             db, account_id, all_detections, driver_map,
             actual_cost_map, forecast_cost_map,

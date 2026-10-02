@@ -199,6 +199,17 @@ export default function Anomalies() {
           <div className="page-subtitle">
             Z-score + IQR detection against FR-2 forecast baseline (FR-3)
           </div>
+          <div style={{
+            marginTop: 8,
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            fontSize: 11, color: '#fbbf24',
+            background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)',
+            borderRadius: 6, padding: '4px 10px',
+          }}>
+            <AlertTriangle size={11} />
+            Anomaly counts are measured against synthetic seed data (180 rows), not live AWS billing.
+            False-positive rates may differ once real billing history is collected.
+          </div>
         </div>
         <div style={{ display: 'flex', gap: 8, marginLeft: 'auto', alignItems: 'center' }}>
           {/* Window selector */}

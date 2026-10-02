@@ -505,19 +505,39 @@ def predict_costs(db: Session, account_ids: List[str]) -> Dict[str, Any]:
 
 def get_service_attribution(db: Session, account_ids: List[str]) -> List[Dict[str, Any]]:
     """
-    Return per-service attribution for the given accounts.
+    Return per-service RAW (un-normalized) attribution data for the given accounts.
 
-    Each entry contains:
-      service          — service name (EC2, RDS, S3, Lambda)
-      attribution_pct  — % of total 30-day projected spend (from FR-2 normalization)
-      monthly_estimate — 30-day projected spend for this service (USD)
-      trend_rate       — linear slope of historical daily cost (USD/day, from poly fit)
-      avg_daily_cost   — mean historical daily cost over all available data
+    PURPOSE
+    ───────
+    This function is used for two things:
+      1. Driver ranking in anomaly detection (FR-3.4): identify which service is
+         most likely responsible for an anomaly, using raw relative magnitudes.
+      2. Trend-rate data for future forecast-explanation features.
 
-    This is the canonical attribution source for both forecasting and anomaly
-    detection. The trend_rate and avg_daily_cost fields support the future
-    trend-narrative / forecast-explanation feature without requiring a separate
-    data-loading pass.
+    ⚠️  NOT the same as the normalized FR-2.4 attribution percentages
+    ───────────────────────────────────────────────────────────────────
+    The field `raw_attribution_pct` is computed as:
+        (service_raw_30d_sum / headline_total_30d_sum) × 100
+
+    Because each service's model runs independently (and may have different
+    trend directions), raw_attribution_pct CAN exceed 100% for a single
+    service and does NOT sum to 100 across services. For example, a service
+    with a strong upward trend extrapolates a larger 30-day sum than its
+    average historical contribution, yielding > 100%.
+
+    For user-facing normalized percentages that sum to 100% and match the
+    Predictions page, use the /predictions/per-service endpoint, which calls
+    _forecast_per_service() and enforces is_normalized=True with diff=0.0.
+
+    DO NOT use raw_attribution_pct in any user-visible text or explanation.
+    Use it only as a relative ranking signal for driver identification.
+
+    Each returned entry contains:
+      service            — service name (EC2, RDS, S3, Lambda)
+      raw_attribution_pct — raw % of headline 30d spend (un-normalized, may exceed 100)
+      monthly_estimate_raw — raw 30-day projected spend for this service (USD, un-normalized)
+      trend_rate         — linear slope of historical daily cost (USD/day, from poly fit)
+      avg_daily_cost     — mean historical daily cost over all available data
     """
     service_data = _load_per_service_data(db, account_ids)
     if not service_data:
@@ -572,27 +592,21 @@ def get_service_attribution(db: Session, account_ids: List[str]) -> List[Dict[st
 
         preds = np.maximum(preds, 0.0)
 
-        # Normalize to headline
-        raw_day_sums = preds.sum()  # single service; scale against matrix later
-        # (Full normalization is done in _forecast_per_service; here we just
-        # use the raw sum proportion for attribution %)
-        svc_30d_raw = float(preds.sum())
-
-        # Approximate normalized share
-        headline_sum = float(headline_totals.sum()) if total_30d > 1e-9 else 1.0
-        # We scale by the same factor as _forecast_per_service would:
-        #   scale = headline_total[day] / raw_day_sum_all_services
-        # Since we don't have all services here, use ratio to headline total
-        # (conservative — exact normalization comes from per_service_forecast endpoint)
-        attribution_pct = round((svc_30d_raw / headline_sum * 100) if headline_sum > 1e-9 else 0.0, 1)
+        # Raw (un-normalized) share relative to headline.
+        # See docstring — raw_attribution_pct may exceed 100% and does NOT sum
+        # to 100 across services. Use it only for driver ranking, never for
+        # user-facing display. Normalized percentages come from _forecast_per_service().
+        svc_30d_raw     = float(preds.sum())
+        headline_sum    = float(headline_totals.sum()) if total_30d > 1e-9 else 1.0
+        raw_attr_pct    = round((svc_30d_raw / headline_sum * 100) if headline_sum > 1e-9 else 0.0, 1)
 
         result.append({
-            "service":           svc,
-            "attribution_pct":   attribution_pct,
-            "monthly_estimate":  round(svc_30d_raw, 2),
-            "trend_rate":        round(trend_rate, 6),   # USD/day slope
-            "avg_daily_cost":    round(float(np.mean(y)), 4),
+            "service":              svc,
+            "raw_attribution_pct":  raw_attr_pct,      # UN-NORMALIZED — ranking only
+            "monthly_estimate_raw": round(svc_30d_raw, 2),  # raw, not FR-2.4 normalized
+            "trend_rate":           round(trend_rate, 6),    # USD/day slope
+            "avg_daily_cost":       round(float(np.mean(y)), 4),
         })
 
-    result.sort(key=lambda x: x["attribution_pct"], reverse=True)
+    result.sort(key=lambda x: x["raw_attribution_pct"], reverse=True)
     return result

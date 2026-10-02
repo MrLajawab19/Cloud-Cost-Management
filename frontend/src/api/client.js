@@ -74,6 +74,11 @@ export const anomaliesAPI = {
   refresh:    ()            => api.post('/anomalies/refresh'),
 }
 
+export const simulationsAPI = {
+  get:   (recId)  => api.get(`/simulations/${recId}`),
+  batch: (ids)    => api.post('/simulations/batch', { ids }),
+}
+
 export const healthAPI = {
   check: () => api.get('/health'),
 }

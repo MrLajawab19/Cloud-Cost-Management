@@ -1,13 +1,15 @@
 // src/pages/Recommendations.jsx — Cleanup recommendations page
 import { useState, useEffect } from 'react'
-import { Lightbulb, CheckCircle, Search, Filter, DollarSign } from 'lucide-react'
+import { Lightbulb, CheckCircle, Search, Filter, DollarSign, Zap } from 'lucide-react'
 import { recommendationsAPI } from '../api/client'
+import { SimulationModal } from './Simulations'
 
 export default function Recommendations() {
-  const [recs,      setRecs]      = useState([])
-  const [summary,   setSummary]   = useState(null)
-  const [loading,   setLoading]   = useState(true)
-  const [filter,    setFilter]    = useState({ severity: '', service_type: '' })
+  const [recs,          setRecs]          = useState([])
+  const [summary,       setSummary]       = useState(null)
+  const [loading,       setLoading]       = useState(true)
+  const [filter,        setFilter]        = useState({ severity: '', service_type: '' })
+  const [simulatingId,  setSimulatingId]  = useState(null)  // rec id being simulated
 
   const load = async () => {
     setLoading(true)
@@ -168,18 +170,42 @@ export default function Recommendations() {
                     Performance optimization (no direct cost)
                   </div>
                 )}
-                <button
-                  className="btn btn-success btn-sm"
-                  onClick={() => handleResolve(rec.id)}
-                >
-                  <CheckCircle size={14} />
-                  Mark Resolved
-                </button>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {rec.potential_savings_usd > 0 && (
+                    <button
+                      id={`sim-inline-${rec.id}`}
+                      className="btn btn-sm"
+                      onClick={() => setSimulatingId(rec.id)}
+                      style={{
+                        background: 'rgba(52,211,153,0.1)',
+                        border: '1px solid rgba(52,211,153,0.25)',
+                        color: '#34d399',
+                      }}
+                      title="Project cost impact before acting"
+                    >
+                      <Zap size={13} />
+                      Simulate
+                    </button>
+                  )}
+                  <button
+                    className="btn btn-success btn-sm"
+                    onClick={() => handleResolve(rec.id)}
+                  >
+                    <CheckCircle size={14} />
+                    Mark Resolved
+                  </button>
+                </div>
               </div>
             </div>
           ))}
         </div>
       )}
+
+      {/* Simulation modal */}
+      {simulatingId && (
+        <SimulationModal recId={simulatingId} onClose={() => setSimulatingId(null)} />
+      )}
+
     </div>
   )
 }
