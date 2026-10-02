@@ -1,0 +1,380 @@
+Software Requirements Specification
+Cloud Cost Monitoring
+Explainable, Cross-Provider Cost Intelligence
+M.Tech Cloud Computing | BITS Pilani
+Dissertation / Project Work — CC ZG628T
+Document Version 2.0 (Amended, Status-Tracked)
+Document Control
+Project Title
+Cloud Cost Monitoring
+Document Type
+Software Requirements Specification (SRS)
+Baseline Source
+Client-provided SRS, Document Version 1.0
+This Version
+Version 2.0 — functional requirements unchanged from v1.0; adds a technology-flexibility clause, non-functional requirements, and an implementation status / traceability matrix
+Status
+Living document — to be updated as implementation progresses through the Design & Development phase
+Version
+Owner
+Change Summary
+1.0
+Client
+Original baseline SRS: Objective, Scope, and Functional Requirements FR-1 through FR-8 with Must/Should/Could priorities.
+2.0
+Project team
+Added a Technology & Implementation Flexibility clause (Section 4); added Non-Functional Requirements (Section 5); added an Implementation Status & Traceability Matrix (Section 6); added a recommended Build Order & Module Dependencies section (Section 7); no changes to the wording, IDs, or priorities of the original functional requirements.
+This document is intended to be followed for the remainder of the implementation. Sections 1–3 reproduce the client's approved baseline requirements unchanged. Sections 4 onward are additions made to support implementation planning and dissertation reporting, and do not alter what was originally agreed.
+1. Objective
+Organizations running workloads on multiple cloud providers currently rely on each provider's own monitoring tools (e.g. AWS CloudWatch, Cost Explorer, Azure Cost Management) separately. These tools report cost and usage, but do not explain why costs are changing, do not span providers, do not flag abnormal cost behavior beyond simple threshold alerts, do not turn a forward-looking cost forecast into a concrete commitment decision (e.g. whether a Reserved Instance or Savings Plan is worth buying), and generally leave every savings recommendation as a manual task regardless of how low-risk it is. This system is built to address those gaps directly, using AWS and Azure cost data as the working environment.
+2. Scope
+The system collects and normalizes cost and usage data from AWS and Azure, forecasts near-term spend with per-service explainability, detects anomalous cost behavior, lets a user simulate the financial impact of a rightsizing recommendation before committing to it, recommends Reserved Instance / Savings Plan purchases based on forecasted usage, and automatically acts on low-risk savings opportunities while escalating higher-risk actions through a notify-and-wait process. All of this is presented through a single lightweight web dashboard.
+The system is explicitly scoped to two cloud providers (AWS and Azure). Google Cloud Platform (GCP) integration is treated as a possible future extension, not a core deliverable of this phase.
+Multi-Cloud Aggregation — collect and normalize AWS and Azure cost/usage data into one schema.
+Explainable Forecasting — predict near-term spend per service, with attribution for each prediction.
+Anomaly Detection — flag cost/usage behavior that deviates from the forecasted baseline.
+What-If Simulations — project the cost impact of a hypothetical rightsizing action before it is taken.
+Rightsizing Recommendations — identify and rank idle/underutilized resources by savings potential.
+Savings Plan Optimiser — recommend Reserved Instance / Savings Plan purchases using break-even analysis.
+Automated Remediation with Escalation — alert on budget threshold breaches and act automatically on low-risk savings, escalating to a more disruptive action only after notify-and-wait.
+Dashboard — present all of the above through a single, lightweight web interface.
+3. Functional Requirements
+Requirements are grouped by functional module. Each requirement has a unique ID for traceability. Priority is expressed as Must (core deliverable), Should (expected but not blocking), or Could (stretch/future extension). Implementation status against each requirement is tracked separately in Section 6.
+3.1 Multi-Cloud Aggregation (FR-1)
+In plain terms: this module pulls in the raw billing and usage data from both AWS and Azure and puts it into one common format, so the rest of the system doesn't need to know or care which cloud a resource came from.
+ID
+Requirement
+Priority
+FR-1.1
+The system shall pull daily resource and cost data live from AWS via its cost/usage APIs.
+Must
+FR-1.2
+The system shall pull daily resource and cost data live from Azure via its cost/usage APIs.
+Must
+FR-1.3
+The system shall map AWS and Azure resource and cost concepts (e.g. an AWS EC2 instance and an Azure Virtual Machine) into a single normalized schema.
+Must
+FR-1.4
+The normalized schema shall be provider-agnostic, so downstream forecasting, anomaly detection, and remediation components require no provider-specific logic.
+Must
+3.2 Explainable Forecasting (FR-2)
+In plain terms: this module predicts what a user is likely to spend in the near future, per service, and explains which service or usage pattern is driving that number — instead of handing back a single number with no explanation.
+ID
+Requirement
+Priority
+FR-2.1
+The system shall forecast near-term future cost (e.g. next month's spend) at both the overall and per-service level.
+Must
+FR-2.2
+The system shall compare at least two forecasting approaches (e.g. Prophet and SARIMA) on the same historical data.
+Must
+FR-2.3
+The system shall evaluate forecast accuracy on a held-out window using MAPE and/or RMSE.
+Must
+FR-2.4
+The system shall attribute each forecast to the specific service(s) or usage pattern(s) driving it (e.g. via SHAP), rather than returning a single opaque number.
+Must
+FR-2.5
+Forecast output shall be presented in a form that supports budget planning (e.g. per-service breakdown of projected spend for the upcoming period).
+Must
+3.3 Anomaly Detection (FR-3)
+In plain terms: this module watches for spending or usage that doesn't match what was predicted, and flags it automatically — the user does not have to guess and set a manual dollar-threshold alert themselves.
+ID
+Requirement
+Priority
+FR-3.1
+The system shall flag cost or usage behavior that deviates meaningfully from the forecast produced by FR-2, without requiring the user to define a static threshold.
+Must
+FR-3.2
+The system shall support residual-based detection (comparing actual cost to forecast, flagged against a statistically-derived bound).
+Must
+FR-3.3
+The system shall support unsupervised anomaly detection over multivariate usage/cost features (e.g. Isolation Forest) to catch patterns a single-series residual check may miss.
+Should
+FR-3.4
+Each detected anomaly shall be reported together with a likely cause, cross-referenced against the forecast attribution from FR-2.4.
+Must
+FR-3.5
+Anomalies shall be surfaced on the dashboard as a feed distinct from routine forecasts.
+Must
+3.4 What-If Simulations (FR-4)
+In plain terms: before a rightsizing recommendation (FR-5) is acted on, the user can see exactly how much it would save — the system shows the outcome of the change without actually making it.
+ID
+Requirement
+Priority
+FR-4.1
+The system shall recompute and present projected cost impact for a hypothetical rightsizing action on a specific resource (from FR-5), before that action is taken.
+Must
+3.5 Rightsizing Recommendations (FR-5)
+In plain terms: this module finds resources that are bigger (and more expensive) than they need to be, and sorts them so the ones with the biggest potential savings are shown first.
+ID
+Requirement
+Priority
+FR-5.1
+The system shall identify idle or underutilized resources from utilization metrics (e.g. CPU usage) across both providers.
+Must
+FR-5.2
+Identified resources shall be ranked by their potential cost savings, so the highest-impact candidates surface first.
+Must
+FR-5.3
+Each recommendation shall be evaluable through the What-If Simulation capability (FR-4) before any action is taken.
+Must
+3.6 Savings Plan Optimiser (FR-6)
+In plain terms: for resources a user is going to keep using long-term, this module works out whether paying upfront for a discounted plan (instead of pay-as-you-go) would actually save money, and by when.
+ID
+Requirement
+Priority
+FR-6.1
+For resources with sustained, non-idle forecasted usage, the system shall compare forecasted on-demand cost against Reserved Instance / Savings Plan pricing.
+Must
+FR-6.2
+The system shall calculate a break-even point — the point at which cumulative commitment cost drops below cumulative on-demand cost.
+Must
+FR-6.3
+A resource shall only be recommended for commitment if its break-even point falls within a configurable horizon (e.g. within 8 months of a 12-month plan).
+Must
+FR-6.4
+A resource that has been recently flagged as anomalous (FR-3) shall be excluded from commitment recommendations until its usage pattern is confirmed stable.
+Must
+3.7 Automated Remediation with Escalation (FR-7)
+In plain terms: if spending crosses a budget limit, the system alerts the owner and fixes the easy, low-risk stuff (resizing) on its own. If nobody responds, it warns louder, and only turns a resource off — never deletes it — as a last resort after giving the owner time to react.
+ID
+Requirement
+Priority
+FR-7.1
+The system shall raise an alert on the dashboard/alert channel when spend crosses a configured budget threshold.
+Must
+FR-7.2
+The system shall automatically resize (rightsize) a resource identified as low-risk (FR-5) without requiring manual approval.
+Must
+FR-7.3
+If a raised alert is not acknowledged, the system shall escalate the notification (e.g. wider audience or channel) after a configurable window.
+Must
+FR-7.4
+The system shall automatically stop a resource — never terminate or delete it — only after the owner has been notified and a configurable grace period (e.g. 24–48 hours) has passed with no action taken.
+Must
+FR-7.5
+If the owner acts at any point during the grace period, the escalation shall be cancelled and no automatic stop shall occur.
+Must
+FR-7.6
+A resource flagged as anomalous (FR-3) within the recent window shall be excluded from automatic stopping, though it may still be resized.
+Must
+FR-7.7
+Every automated action shall be written to an auditable log capturing the resource, action type, before/after state, trigger reason, and timestamp.
+Must
+FR-7.8
+Automated remediation shall be configurable to be disabled per-resource or per-account for owners who require manual sign-off on any change.
+Should
+3.8 Dashboard (FR-8)
+In plain terms: everything above — forecasts, alerts, recommendations, and simulation results — is shown in one place, so a user does not have to check multiple tools.
+ID
+Requirement
+Priority
+FR-8.1
+The system shall present forecasts, anomalies, recommendations, and simulation results through a single, lightweight web dashboard.
+Must
+FR-8.2
+The dashboard shall visually distinguish routine forecast information from anomaly alerts.
+Should
+4. Technology & Implementation Flexibility
+Where a functional requirement names a specific technique or library as an example — such as Prophet, SARIMA, SHAP, or Isolation Forest — that name is illustrative of one way to satisfy the requirement, not a mandated technology. The binding obligation is the functional behavior described by the requirement (e.g. FR-2.4's obligation to attribute a forecast to a specific driver), not the specific library used to produce it.
+This applies in particular to the following requirements, where alternative approaches are explicitly acceptable:
+FR-2.2 / FR-2.4 (forecasting and attribution): any two comparable forecasting methods may be used in place of Prophet/SARIMA, and attribution may be produced via a model's native decomposition (e.g. trend/seasonality components), a secondary explanatory model, or another defensible method in place of SHAP.
+FR-3.3 (unsupervised anomaly detection): any unsupervised method suited to multivariate usage/cost features may be used in place of Isolation Forest.
+FR-6.1 (commitment pricing comparison): pricing data may be sourced from a static, periodically-updated reference table rather than a live pricing API, provided this limitation is documented.
+This section does not remove any Must-priority obligation; it clarifies that the obligation is functional, not technological, giving implementation flexibility to select the most workable approach within the project timeline.
+5. Non-Functional Requirements
+The following requirements are not named in the client's original functional scope but are necessary to deliver it responsibly, particularly given FR-7's automated actions on live cloud resources. They are derived from decisions already established during design discussion and from patterns already present in the existing codebase.
+ID
+Requirement
+Priority
+NFR-1
+User credentials shall be stored as salted hashes (e.g. bcrypt), never in plaintext.
+Must
+NFR-2
+Cloud provider access keys/secrets shall be stored encrypted at rest (e.g. via symmetric encryption such as Fernet), and shall never be returned in full by any API response.
+Must
+NFR-3
+API access shall require an authenticated session (e.g. JWT bearer token); unauthenticated requests to protected endpoints shall be rejected.
+Must
+NFR-4
+Every automated remediation action (FR-7.7) shall be logged in a way that is queryable and durable under concurrent reads/writes from the dashboard and the background scheduler.
+Must
+NFR-5
+Destructive or state-changing remediation actions (e.g. automatic stop, FR-7.4) shall be validated against demo/sandbox data before being enabled against a live cloud account.
+Must
+NFR-6
+The system shall support multiple independent cloud accounts per user, with all resource, cost, and recommendation data scoped by account.
+Should
+NFR-7
+Background data collection (FR-1) shall run on a recurring schedule (e.g. every 6 hours) without requiring manual triggering, with a manual sync option available.
+Should
+6. Implementation Status & Traceability Matrix
+This section records implementation status as of the current point in the Design & Development phase. It is expected to be updated as work continues and should be treated as the single source of truth for “what is actually built” when preparing progress reports or the final dissertation.
+Completed
+Requirement is implemented and matches the described behavior, within the scope currently supported (e.g. AWS-only where multi-cloud is the eventual target).
+Partial
+Some part of the requirement exists in the codebase, but it does not yet satisfy the requirement in full.
+Not Started
+No corresponding implementation exists yet.
+6.1 Multi-Cloud Aggregation (FR-1)
+ID
+Status
+Implementation Note
+FR-1.1
+Completed
+AWS collection is implemented (EC2, S3, RDS, Lambda via boto3, scheduled every 6 hours).
+FR-1.2
+Not Started
+No Azure SDK, credentials, or collector exists yet.
+FR-1.3
+Not Started
+Current schema is AWS-shaped; no normalized cross-provider mapping exists.
+FR-1.4
+Not Started
+Depends on FR-1.2 and FR-1.3 being completed first.
+6.2 Explainable Forecasting (FR-2)
+ID
+Status
+Implementation Note
+FR-2.1
+Completed
+Per-service 30-day forecast implemented. Each service (EC2, RDS, S3, Lambda) is forecast independently then normalized so per-service values sum exactly to the headline total on every forecast day. is_normalized=True is asserted on every response row and verified by automated check (diff=0.0).
+FR-2.2
+Completed
+Two forecasting models implemented: (1) Polynomial Regression (degree-2, scikit-learn) and (2) Holt's Double Exponential Smoothing (additive trend, pure-NumPy grid-search over alpha/beta). Both train on the same historical window, produce independent 30-day forecasts, and are evaluated head-to-head on the held-out window. The lower-MAPE model is selected as the headline forecast. Per Section 4, pure-NumPy Holt-DES is an acceptable substitute for Prophet/SARIMA.
+FR-2.3
+Completed
+MAPE and RMSE reported on a held-out validation window. Rule: held_out = max(3, round(0.20 * n_days)); comparison skipped if n_days < 10 (would leave < 7 training points). Current live values: poly_mape=10.1%, poly_rmse=1.23, hw_mape=16.57%, hw_rmse=1.79 (46 training days, 9-day held-out window). R² score is also retained in model_info for reference.
+FR-2.4
+Completed
+Service-contribution attribution implemented via per-service model decomposition. Each service's normalized 30-day forecast sum is expressed as a percentage of the headline total (attribution_pct). Current live attribution: EC2=54.1%, RDS=37.7%, S3=7.3%, Lambda=0.9%. Displayed as a bar chart in the Predictions UI. Per Section 4, native model decomposition is an acceptable substitute for SHAP.
+FR-2.5
+Completed
+Predictions page renders five sections: (1) metric cards (predicted total, best model, MAPE, training days), (2) model comparison card with MAPE/RMSE per model and winner badge, (3) combined historical+forecast chart with Both-Models toggle, (4) per-service stacked area chart and attribution bars (NORMALIZED ✓ badge shown), (5) forecast data table with per-service columns and daily totals. All data from /predictions/ and /predictions/per-service endpoints.
+6.3 Anomaly Detection (FR-3)
+ID
+Status
+Implementation Note
+FR-3.1
+Completed
+Cost/usage anomalies are flagged when actual daily cost deviates from the FR-2 polynomial/Holt-DES forecast baseline by |z| >= 2.5sigma. Detection runs independently for each service (EC2, RDS, S3, Lambda) AND for the TOTAL account-level daily cost aggregate (service_type='TOTAL'). Rows with |z| < 2.5 are never stored. TOTAL-level anomalies that survive the threshold are flagged with driver_service = the highest-ranked service from get_service_attribution().
+FR-3.2
+Completed
+FR-2 forecast baseline is the direct input to the anomaly detector. The uncertainty band is derived empirically from the rolling distribution of historical forecast residuals (Option A — residual-derived band), using a 14-day rolling window. No fixed % tolerance is used.
+FR-3.3
+Completed
+Unsupervised Z-score detector (primary) combined with IQR check (secondary). Z-score: z = (residual - rolling_mean) / rolling_std, lookback=14 days. IQR: flags if residual > Q3 + 1.5*IQR or < Q1 - 1.5*IQR. Per Section 4, Z-score + IQR is an acceptable unsupervised substitute for Isolation Forest given the current data volume (46 days x 4 services). Severity: |z| 2.5-3.5 = warning, |z| >= 3.5 = critical. NOTE: Current anomaly counts are measured against synthetic seed data (180 rows, source='synthetic_seed'), not live AWS billing. Real-world false-positive rates may differ once the account accumulates sufficient live AWS billing history.
+FR-3.4
+Completed
+Driver service attribution uses get_service_attribution() — the shared helper in ml_predictor.py that FR-2.4 also uses for ranking. IMPORTANT: get_service_attribution() returns raw_attribution_pct — an un-normalized ranking signal (computed as service_raw_30d_sum / headline_30d_sum * 100). This value can exceed 100% for a single service and does NOT sum to 100 across services; it is used only for driver identification (which service most likely caused the anomaly), not for user-facing display. For user-facing normalized percentages (which sum to 100% and match the Predictions page), the /predictions/per-service endpoint is the authoritative source.
+FR-3.5
+Completed
+Anomaly feed implemented: (1) Dashboard anomaly widget (critical/warning counts, top driver, link to /anomalies), (2) Dedicated /anomalies page with metric cards, residual timeline chart (spike=red, drop=blue), and sortable anomaly feed table (date, service, actual, forecast, deviation%, z-score, severity badge, direction, driver, resolve button). Anomalies API: GET /anomalies/ (list), GET /anomalies/summary (dashboard widget), POST /anomalies/{id}/resolve (user dismissal with is_resolved=True), POST /anomalies/refresh (manual re-detection trigger). Resolution is permanent — re-detection cycles skip is_resolved=True rows.
+6.4 What-If Simulations (FR-4)
+ID
+Status
+Implementation Note
+FR-4.1
+Not Started
+No simulation endpoint exists; the existing 'resolve' action on a recommendation marks it done without projecting impact first.
+6.5 Rightsizing Recommendations (FR-5)
+ID
+Status
+Implementation Note
+FR-5.1
+Partial
+Rule-based idle/underutilized detection is implemented and working for AWS (EC2 low-CPU, stopped EC2/RDS, empty/large S3 buckets, unused Lambda); not yet extended to Azure.
+FR-5.2
+Completed
+Recommendations are generated with a severity/cost basis that ranks higher-impact candidates, within the current AWS-only scope.
+FR-5.3
+Not Started
+Depends on FR-4 (What-If Simulation) being built.
+6.6 Savings Plan Optimiser (FR-6)
+ID
+Status
+Implementation Note
+FR-6.1
+Not Started
+No Reserved Instance / Savings Plan pricing table exists yet.
+FR-6.2
+Not Started
+No break-even calculation logic exists yet.
+FR-6.3
+Not Started
+Depends on FR-6.2.
+FR-6.4
+Not Started
+Depends on FR-3 (Anomaly Detection) being available first.
+6.7 Automated Remediation with Escalation (FR-7)
+ID
+Status
+Implementation Note
+FR-7.1
+Not Started
+No budget-threshold alerting or notification channel exists yet.
+FR-7.2
+Not Started
+No boto3 write-action (resize) logic exists; recommendations are currently informational only.
+FR-7.3
+Not Started
+Depends on FR-7.1.
+FR-7.4
+Not Started
+Depends on FR-7.1–FR-7.3 and a grace-period scheduler job.
+FR-7.5
+Not Started
+Depends on FR-7.4.
+FR-7.6
+Not Started
+Depends on FR-3 (Anomaly Detection).
+FR-7.7
+Not Started
+No audit-log table exists yet; one is planned to follow the existing SQLAlchemy model pattern.
+FR-7.8
+Not Started
+Should-priority; to be added once FR-7.2/FR-7.4 exist.
+6.8 Dashboard (FR-8)
+ID
+Status
+Implementation Note
+FR-8.1
+Partial
+Dashboard, Resources, Costs, Recommendations, and Predictions pages exist; anomaly and simulation views do not yet.
+FR-8.2
+Not Started
+Depends on FR-3 (Anomaly Detection) existing to visually distinguish.
+Also implemented, outside the current functional scope but supporting it operationally: multi-account SaaS model with per-account data scoping, JWT + bcrypt authentication, Fernet-encrypted credential storage, and a Docker Compose deployment (SQLite for local development, PostgreSQL for production).
+7. Recommended Build Order & Module Dependencies
+The following order reflects functional dependencies between modules (e.g. FR-6.4 and FR-7.6 require FR-3's anomaly flag to exist) and is recommended for the remainder of the Design & Development phase:
+#
+Module
+Rationale
+1
+Explainable Forecasting (FR-2)
+Extend the existing forecast to per-service granularity, add a second comparable method, add MAPE/RMSE evaluation, and add attribution. This is a foundation for FR-3 and FR-6.
+2
+Anomaly Detection (FR-3)
+Build residual-based detection against the FR-2 baseline; Isolation Forest (FR-3.3) may follow once time permits, as it is Should-priority.
+3
+What-If Simulations (FR-4)
+Independent of FR-2/FR-3; can be built in parallel by reusing the existing cost-estimation logic.
+4
+Savings Plan Optimiser (FR-6)
+Independent of FR-4; depends on FR-3 only for the FR-6.4 exclusion check. A static pricing table plus payback-period logic, no ML required.
+5
+Automated Remediation (FR-7)
+The largest module; depends on FR-5 (existing) for resize candidates and FR-3 for the FR-7.6 exclusion check. Recommend validating fully against demo-mode data (NFR-5) before any live-account testing.
+6
+Multi-Cloud Aggregation (FR-1)
+The other large module; can be built in parallel with FR-2–FR-7 since it primarily extends data collection, but every downstream module will need to be re-validated against Azure data once it lands.
+7
+Dashboard (FR-8)
+Extend incrementally as each module above becomes available, rather than as a single final step.
+8. Assumptions & Constraints
+Development window: the remaining implementation is expected to fit within the Design & Development phase of the project's Plan of Work.
+Azure test data: FR-1.2 assumes availability of an Azure subscription (or sandbox/mocked billing data equivalent to the existing AWS demo mode) for development and testing.
+Live remediation testing: per NFR-5, FR-7.2 and FR-7.4 will be validated against demo/sandbox data before being enabled against any live cloud account, to avoid disrupting real workloads during development.
+Pricing data currency: FR-6.1's Reserved Instance / Savings Plan pricing may be sourced from a static, periodically-updated table rather than a live pricing API (see Section 4); this limitation will be stated explicitly in the final report.
+No requirement, ID, or priority from the client-approved v1.0 baseline (Sections 1–3) has been altered by this version.
