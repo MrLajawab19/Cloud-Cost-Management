@@ -4,7 +4,7 @@ Used for historical trend charts, ML training data, and client-facing recommenda
 """
 
 from datetime import datetime
-from sqlalchemy import Column, Float, DateTime, Date, String, Boolean, Text, ForeignKey
+from sqlalchemy import Column, Float, DateTime, Date, String, Boolean, Text, ForeignKey, Integer
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
 
@@ -68,6 +68,8 @@ class Recommendation(Base):
     action         = Column(String(255), nullable=False)   # What the user should do
     severity       = Column(String(20),  default="medium") # low | medium | high | critical
     potential_savings_usd = Column(Float, default=0.0)
+    upfront_cost_usd      = Column(Float, nullable=True)
+    payback_days          = Column(Integer, nullable=True)
 
     is_resolved = Column(Boolean, default=False)
     created_at  = Column(DateTime, default=datetime.utcnow)

@@ -101,6 +101,11 @@ def run_collection_pipeline(user_id=None, account_id=None):
         ]
         if detect_accounts:
             detect_anomalies(db, detect_accounts)
+            
+            # FR-6: generate savings plan recommendations for stable services
+            from services.savings_plan_optimiser import generate_sp_recommendations
+            for acc_id in detect_accounts:
+                generate_sp_recommendations(db, acc_id)
 
         logger.info("✅ Collection pipeline complete.")
     except Exception as e:

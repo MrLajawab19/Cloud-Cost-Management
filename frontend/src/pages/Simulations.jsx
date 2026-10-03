@@ -102,6 +102,15 @@ function SimCard({ sim }) {
             {sim.delta_pct.toFixed(1)}%
           </div>
         </div>
+        {sim.upfront_cost_usd > 0 && (
+          <div>
+            <div style={{ fontSize: 11, color: 'var(--text-3)' }}>Cash Impact (Mo 1)</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#f87171', marginTop: 4 }}>
+              {fmt(sim.first_month_cash_impact_usd)}
+            </div>
+            <div style={{ fontSize: 10, color: 'var(--text-4)' }}>Breakeven: {sim.payback_days}d</div>
+          </div>
+        )}
         {sim.monthly_trend_rate !== 0 && (
           <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
             <div style={{ fontSize: 11, color: 'var(--text-3)' }}>{sim.service_type} trend</div>
@@ -173,7 +182,7 @@ export function SimulationModal({ recId, onClose }) {
         {err && <div style={{ color: '#f87171', fontSize: 13, padding: '20px 0' }}>{err}</div>}
         {sim && <SimCard sim={sim} />}
 
-        {sim && (
+        {sim && !sim.upfront_cost_usd && (
           <div style={{ fontSize: 11, color: 'var(--text-4)', marginTop: 12 }}>
             {sim.synthetic_data_note}
           </div>
@@ -372,10 +381,20 @@ export default function Simulations() {
                               {fmt(sim.delta_usd)}<span style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 400 }}>/mo</span>
                             </div>
                           </div>
-                          <div>
-                            <div style={{ fontSize: 10, color: 'var(--text-4)' }}>REDUCTION</div>
-                            <div style={{ fontSize: 20, fontWeight: 800, color: '#34d399' }}>{sim.delta_pct.toFixed(1)}%</div>
-                          </div>
+                          {sim.upfront_cost_usd > 0 ? (
+                            <div>
+                              <div style={{ fontSize: 10, color: 'var(--text-4)' }}>CASH IMPACT (MO 1)</div>
+                              <div style={{ fontSize: 16, fontWeight: 700, color: '#f87171', marginTop: 3 }}>
+                                {fmt(sim.first_month_cash_impact_usd)}
+                              </div>
+                              <div style={{ fontSize: 10, color: 'var(--text-4)' }}>Breakeven: {sim.payback_days}d</div>
+                            </div>
+                          ) : (
+                            <div>
+                              <div style={{ fontSize: 10, color: 'var(--text-4)' }}>REDUCTION</div>
+                              <div style={{ fontSize: 20, fontWeight: 800, color: '#34d399' }}>{sim.delta_pct.toFixed(1)}%</div>
+                            </div>
+                          )}
                           {sim.monthly_trend_rate !== 0 && (
                             <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
                               <div style={{ fontSize: 10, color: 'var(--text-4)' }}>TREND</div>

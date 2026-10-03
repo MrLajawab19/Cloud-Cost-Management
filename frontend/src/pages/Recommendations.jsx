@@ -1,6 +1,6 @@
 // src/pages/Recommendations.jsx — Cleanup recommendations page
 import { useState, useEffect } from 'react'
-import { Lightbulb, CheckCircle, Search, Filter, DollarSign, Zap } from 'lucide-react'
+import { Lightbulb, CheckCircle, Search, Filter, DollarSign, Zap, Lock, AlertTriangle } from 'lucide-react'
 import { recommendationsAPI } from '../api/client'
 import { SimulationModal } from './Simulations'
 
@@ -53,6 +53,16 @@ export default function Recommendations() {
 
   return (
     <div className="page-content animate-up">
+      {/* Synthetic Pricing Banner */}
+      {recs.some(r => r.action === "Purchase Savings Plan") && (
+        <div className="warning-banner stagger-1" style={{ marginBottom: 20, background: 'rgba(234, 179, 8, 0.1)', color: '#ca8a04', border: '1px solid rgba(234, 179, 8, 0.2)', padding: '12px 16px', borderRadius: 8, display: 'flex', gap: 12, alignItems: 'center' }}>
+          <AlertTriangle size={18} />
+          <div style={{ fontSize: 13 }}>
+            <strong>Synthetic Data Caveat:</strong> Savings Plan pricing and break-even points are based on synthetic seed pricing tables, not live AWS Pricing API data.
+          </div>
+        </div>
+      )}
+
       {/* Summary row */}
       {summary && (
         <div className="metric-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
@@ -154,8 +164,9 @@ export default function Recommendations() {
 
               <div className="rec-card-body">
                 <div className="rec-card-desc">{rec.description}</div>
-                <div className="rec-action-box" style={{ marginTop: 'var(--s-4)' }}>
-                  <strong>Action Plan:</strong> {rec.action}
+                <div className="rec-action-box" style={{ marginTop: 'var(--s-4)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {rec.action === "Purchase Savings Plan" && <Lock size={14} style={{color: '#8b5cf6'}} />}
+                  <div><strong>Action Plan:</strong> {rec.action}</div>
                 </div>
               </div>
 

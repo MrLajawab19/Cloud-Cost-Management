@@ -76,6 +76,8 @@ def _result_to_dict(r: SimulationResult) -> dict:
         "monthly_trend_rate":    r.monthly_trend_rate,
         "is_service_level_approx": r.is_service_level_approx,
         "payback_days":          r.payback_days,
+        "upfront_cost_usd":      r.upfront_cost_usd,
+        "first_month_cash_impact_usd": r.first_month_cash_impact_usd,
         # Explanation text — consumed directly by the frontend
         "approx_note": (
             "Service-level approximation: assumes this action reduces the "

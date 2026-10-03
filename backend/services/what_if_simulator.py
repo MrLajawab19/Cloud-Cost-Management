@@ -89,6 +89,8 @@ class SimulationResult:
 
     # Nullable — only set when there is a known upfront implementation cost to recover
     payback_days: Optional[int] = None
+    upfront_cost_usd: Optional[float] = None
+    first_month_cash_impact_usd: float = 0.0
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -200,12 +202,27 @@ def run_simulation(
         baseline_30d = total_30d  # conservative: treat total as baseline
 
     # ── Compute simulation ───────────────────────────────────────
-    # potential_savings_usd is already monthly (verified from cleanup_advisor.py).
-    # NO ×30 conversion. Direct subtraction from monthly baseline.
-    delta_usd      = min(savings_usd, baseline_30d)   # cap: can't save more than baseline
-    simulated_30d  = round(max(0.0, baseline_30d - delta_usd), 4)
-    delta_usd      = round(baseline_30d - simulated_30d, 4)
-    delta_pct      = round((delta_usd / baseline_30d * 100) if baseline_30d > 1e-9 else 0.0, 2)
+    if rec.action == "Purchase Savings Plan":
+        # SPs redefine the monthly cost structure. The new simulated monthly cost 
+        # is the baseline minus the established monthly savings of the plan.
+        delta_usd      = min(savings_usd, baseline_30d)
+        simulated_30d  = round(max(0.0, baseline_30d - delta_usd), 4)
+        delta_usd      = round(baseline_30d - simulated_30d, 4)
+        delta_pct      = round((delta_usd / baseline_30d * 100) if baseline_30d > 1e-9 else 0.0, 2)
+        
+        payback_days = rec.payback_days
+        upfront_cost_usd = rec.upfront_cost_usd or 0.0
+        first_month_cash_impact_usd = round(simulated_30d + upfront_cost_usd, 4)
+    else:
+        # Standard rightsizing/cleanup
+        delta_usd      = min(savings_usd, baseline_30d)
+        simulated_30d  = round(max(0.0, baseline_30d - delta_usd), 4)
+        delta_usd      = round(baseline_30d - simulated_30d, 4)
+        delta_pct      = round((delta_usd / baseline_30d * 100) if baseline_30d > 1e-9 else 0.0, 2)
+        
+        payback_days = None
+        upfront_cost_usd = None
+        first_month_cash_impact_usd = simulated_30d
 
     # ── Uncertainty band (FR-3 residual reuse) ───────────────────
     uncertainty = _estimate_uncertainty(db, [account_id], service_type)
@@ -224,8 +241,8 @@ def run_simulation(
         monthly_trend_rate = 0.0
 
     logger.info(
-        "FR-4 simulation: rec=%s svc=%s baseline=%.2f simulated=%.2f delta=%.2f (%.1f%%)",
-        str(recommendation_id)[:8], service_type, baseline_30d, simulated_30d, delta_usd, delta_pct,
+        "FR-4 simulation: rec=%s svc=%s baseline=%.2f simulated=%.2f delta=%.2f (%.1f%%) upfront=%.2f",
+        str(recommendation_id)[:8], service_type, baseline_30d, simulated_30d, delta_usd, delta_pct, upfront_cost_usd or 0.0
     )
 
     return SimulationResult(
@@ -241,5 +258,7 @@ def run_simulation(
         uncertainty_band_usd = uncertainty,
         monthly_trend_rate   = monthly_trend_rate,
         is_service_level_approx = True,
-        payback_days         = None,   # resize/stop has no upfront cost; reserved for FR-6
+        payback_days         = payback_days,
+        upfront_cost_usd     = upfront_cost_usd,
+        first_month_cash_impact_usd = first_month_cash_impact_usd,
     )
