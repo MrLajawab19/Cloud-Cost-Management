@@ -181,6 +181,7 @@ export default function Anomalies() {
 
   if (loading) return <Loading />
   if (error)   return <ErrorState msg={error} />
+  if (!data)   return <ErrorState msg="No anomaly data returned from backend." />
 
   const { anomalies = [], total = 0, warning_count = 0, critical_count = 0 } = data
   const topDriver = anomalies.reduce((acc, a) => {
@@ -315,16 +316,16 @@ export default function Anomalies() {
                       <span className={`chip chip-${a.service_type.toLowerCase()}`}>{a.service_type}</span>
                     </td>
                     <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--text-1)' }}>
-                      ${a.actual_cost.toFixed(4)}
+                      ${(a.actual_cost ?? 0).toFixed(4)}
                     </td>
                     <td style={{ textAlign: 'right', color: 'var(--text-3)' }}>
-                      ${a.forecast_cost.toFixed(4)}
+                      ${(a.forecast_cost ?? 0).toFixed(4)}
                     </td>
                     <td style={{ textAlign: 'right', color: a.direction === 'spike' ? '#f87171' : '#60a5fa', fontWeight: 600 }}>
-                      {a.direction === 'spike' ? '+' : '-'}{a.deviation_pct}%
+                      {a.direction === 'spike' ? '+' : '-'}{a.deviation_pct ?? '?'}%
                     </td>
                     <td style={{ textAlign: 'right', fontFeatureSettings: '"tnum"', color: 'var(--text-2)' }}>
-                      {a.z_score > 0 ? '+' : ''}{a.z_score.toFixed(2)}σ
+                      {(a.z_score ?? 0) > 0 ? '+' : ''}{(a.z_score ?? 0).toFixed(2)}σ
                     </td>
                     <td><SeverityBadge severity={a.severity} /></td>
                     <td>

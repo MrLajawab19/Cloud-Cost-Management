@@ -6,7 +6,7 @@ import { recommendationsAPI, simulationsAPI } from '../api/client'
 // ── Helpers ───────────────────────────────────────────────────────
 const SVC_COLORS = { EC2: '#ec7211', RDS: '#0073bb', S3: '#1d8102', Lambda: '#6366f1' }
 
-function fmt(v) { return `$${Number(v).toFixed(2)}` }
+function fmt(v) { return `$${Number(v ?? 0).toFixed(2)}` }
 
 // ── Before/After bar ──────────────────────────────────────────────
 function SimBar({ baseline, simulated, uncertainty }) {
@@ -99,7 +99,7 @@ function SimCard({ sim }) {
         <div>
           <div style={{ fontSize: 11, color: 'var(--text-3)' }}>Reduction</div>
           <div style={{ fontSize: 22, fontWeight: 800, color: '#34d399' }}>
-            {sim.delta_pct.toFixed(1)}%
+            {(sim.delta_pct ?? 0).toFixed(1)}%
           </div>
         </div>
         {sim.upfront_cost_usd > 0 && (
@@ -205,8 +205,8 @@ export default function Simulations() {
     setLoading(true)
     setError(null)
     try {
-      const r = await recommendationsAPI.list()
-      const withSavings = (r.data || []).filter(rec => rec.potential_savings_usd > 0)
+      const r = await recommendationsAPI.list().catch(() => ({ data: [] }))
+      const withSavings = (Array.isArray(r.data) ? r.data : []).filter(rec => (rec.potential_savings_usd || 0) > 0)
       setRecs(withSavings)
     } catch {
       setError('Failed to load recommendations.')
@@ -233,9 +233,9 @@ export default function Simulations() {
     const ids = recs.map(r => r.id)
     setSimming(new Set(ids))
     try {
-      const r = await simulationsAPI.batch(ids)
+      const r = await simulationsAPI.batch(ids).catch(() => ({ data: { simulations: [] } }))
       const map = {}
-      for (const s of r.data.simulations) {
+      for (const s of (r.data?.simulations || [])) {
         map[s.recommendation_id] = s
       }
       setSims(map)
@@ -392,7 +392,7 @@ export default function Simulations() {
                           ) : (
                             <div>
                               <div style={{ fontSize: 10, color: 'var(--text-4)' }}>REDUCTION</div>
-                              <div style={{ fontSize: 20, fontWeight: 800, color: '#34d399' }}>{sim.delta_pct.toFixed(1)}%</div>
+                              <div style={{ fontSize: 20, fontWeight: 800, color: '#34d399' }}>{(sim.delta_pct ?? 0).toFixed(1)}%</div>
                             </div>
                           )}
                           {sim.monthly_trend_rate !== 0 && (
