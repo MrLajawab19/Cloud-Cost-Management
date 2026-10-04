@@ -7,6 +7,7 @@ import {
 import { DollarSign, Server, AlertTriangle, TrendingUp, Cpu, HardDrive, ShieldAlert, CheckCircle } from 'lucide-react'
 import { costsAPI, recommendationsAPI, anomaliesAPI } from '../api/client'
 import { Link } from 'react-router-dom'
+import { SimulationModal } from './Simulations'
 
 const SERVICE_COLORS = {
   EC2: '#ec7211', S3: '#1d8102', RDS: '#0073bb', Lambda: '#6366f1',
@@ -18,10 +19,23 @@ const CustomTooltip = ({ active, payload, label }) => {
       <div className="chart-tooltip">
         <div className="chart-tooltip-label">{label || payload[0].name}</div>
         <div className="chart-tooltip-value">
-          ${Number(payload[0].value).toFixed(2)}
+          Actual: ${Number(payload[0].payload?.cost).toFixed(2)}
         </div>
+        {payload[0].payload?.forecast_cost_usd !== undefined && (
+          <div className="chart-tooltip-value" style={{ color: 'var(--text-3)' }}>
+            Baseline: ${Number(payload[0].payload?.forecast_cost_usd).toFixed(2)}
+          </div>
+        )}
       </div>
     );
+  }
+  return null;
+}
+
+const AnomalyDot = (props) => {
+  const { cx, cy, payload } = props;
+  if (payload?.has_anomaly) {
+    return <circle cx={cx} cy={cy} r={5} fill="#f87171" stroke="#fff" strokeWidth={1} />;
   }
   return null;
 }
@@ -37,6 +51,7 @@ export default function Dashboard() {
     recList: [],
     anomSummary: null,
   })
+  const [simModalRecId, setSimModalRecId] = useState(null)
 
   useEffect(() => {
     async function load() {
@@ -162,7 +177,8 @@ export default function Dashboard() {
                   <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: 'var(--text-3)' }} dy={10} />
                   <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: 'var(--text-3)' }} dx={-10} tickFormatter={(v) => `$${v}`} />
                   <RechartsTooltip content={<CustomTooltip />} />
-                  <Area type="monotone" dataKey="cost" stroke="var(--brand-aws-blue)" strokeWidth={2} fillOpacity={1} fill="url(#trendGrad)" />
+                  <Area type="monotone" dataKey="forecast_cost_usd" stroke="var(--text-3)" strokeDasharray="3 3" fillOpacity={0} strokeWidth={1} isAnimationActive={false} />
+                  <Area type="monotone" dataKey="cost" stroke="var(--brand-aws-blue)" strokeWidth={2} fillOpacity={1} fill="url(#trendGrad)" dot={<AnomalyDot />} />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
@@ -268,6 +284,12 @@ export default function Dashboard() {
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--brand-aws-blue)', marginBottom: 2 }}>{r.issue}</div>
                   <div style={{ fontSize: '12px', color: 'var(--text-2)' }}>{r.resource_name || r.resource_id}</div>
+                  <button onClick={() => setSimModalRecId(r.id)} style={{
+                    marginTop: 6, background: 'none', border: 'none', color: '#34d399', fontSize: 12, fontWeight: 700,
+                    cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 4
+                  }}>
+                    Simulate
+                  </button>
                 </div>
                 <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-success)' }}>
                   +${r.potential_savings_usd.toFixed(2)}
@@ -317,6 +339,10 @@ export default function Dashboard() {
             </div>
           )}
         </div>
+      )}
+
+      {simModalRecId && (
+        <SimulationModal recId={simModalRecId} onClose={() => setSimModalRecId(null)} />
       )}
 
     </div>
