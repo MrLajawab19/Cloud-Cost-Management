@@ -204,9 +204,9 @@ def _upsert_rec(db: Session, keys_set: set, r: Resource, issue: str, desc: str, 
         # If it's a "stop" action, generate EscalationState immediately.
         # It's created ONLY ONCE on INSERT.
         if remediation_type == "stop":
-            from models.account import AWSAccount
+            from models.account import CloudAccount
             from datetime import timedelta
-            account = db.query(AWSAccount).filter(AWSAccount.id == r.account_id).first()
+            account = db.query(CloudAccount).filter(CloudAccount.id == r.account_id).first()
             grace_hours = account.grace_period_hours if account else 48
             
             escalation = EscalationState(

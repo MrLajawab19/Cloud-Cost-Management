@@ -1,13 +1,13 @@
 from sqlalchemy.orm import Session
 from database import SessionLocal
 from models.user import User
-from models.account import AWSAccount
+from models.account import CloudAccount
 from services.security import create_access_token
 import uuid
 
 def main():
     db = SessionLocal()
-    account = db.query(AWSAccount).first()
+    account = db.query(CloudAccount).first()
     user = db.query(User).filter(User.id == account.user_id).first()
     
     t1 = create_access_token({"sub": str(user.id)})

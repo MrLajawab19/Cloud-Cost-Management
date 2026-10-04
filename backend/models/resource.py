@@ -35,7 +35,7 @@ class Resource(Base):
     __tablename__ = "resources"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    account_id = Column(String(36), ForeignKey("aws_accounts.id", ondelete="CASCADE"), nullable=False, index=True)
+    account_id = Column(String(36), ForeignKey("cloud_accounts.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # AWS identifiers
     resource_id   = Column(String(255), unique=True, nullable=False, index=True)

@@ -22,7 +22,7 @@ from services.anomaly_detector import (
 )
 from services.security import get_current_user
 from models.user import User
-from models.account import AWSAccount
+from models.account import CloudAccount
 from models.anomaly import Anomaly
 
 router = APIRouter(prefix="/anomalies", tags=["Anomalies"])
@@ -36,14 +36,14 @@ def _account_ids(
     account_id: Optional[str],
 ) -> List[str]:
     if account_id:
-        acc = db.query(AWSAccount).filter(
-            AWSAccount.id == account_id,
-            AWSAccount.user_id == current_user.id,
+        acc = db.query(CloudAccount).filter(
+            CloudAccount.id == account_id,
+            CloudAccount.user_id == current_user.id,
         ).first()
         if not acc:
             raise HTTPException(status_code=403, detail="Account not found or access denied")
         return [account_id]
-    accounts = db.query(AWSAccount).filter(AWSAccount.user_id == current_user.id).all()
+    accounts = db.query(CloudAccount).filter(CloudAccount.user_id == current_user.id).all()
     return [a.id for a in accounts]
 
 
@@ -144,8 +144,8 @@ def resolve_anomaly(
 
     # Verify the anomaly belongs to one of this user's accounts
     user_account_ids = [
-        a.id for a in db.query(AWSAccount)
-        .filter(AWSAccount.user_id == current_user.id).all()
+        a.id for a in db.query(CloudAccount)
+        .filter(CloudAccount.user_id == current_user.id).all()
     ]
     if anomaly.account_id not in user_account_ids:
         raise HTTPException(status_code=403, detail="Access denied")

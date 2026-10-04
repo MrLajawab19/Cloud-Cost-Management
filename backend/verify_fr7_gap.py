@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from database import SessionLocal
-from models.account import AWSAccount
+from models.account import CloudAccount
 from models.resource import Resource
 from models.cost_record import Recommendation
 from models.remediation import RemediationLog, EscalationState
@@ -13,7 +13,7 @@ import datetime
 
 def main():
     db = SessionLocal()
-    account = db.query(AWSAccount).first()
+    account = db.query(CloudAccount).first()
     
     print("\n--- 1. Testing SP Recommendation Independence ---")
     # Seed a stable service with enough baseline for SP

@@ -17,7 +17,7 @@ from database import get_db
 from services.security import get_current_user
 from services.what_if_simulator import run_simulation, SimulationResult
 from models.user import User
-from models.account import AWSAccount
+from models.account import CloudAccount
 from models.cost_record import Recommendation
 
 router = APIRouter(prefix="/simulations", tags=["Simulations"])
@@ -52,8 +52,8 @@ def _resolve_account_id(
         raise HTTPException(status_code=404, detail="Recommendation not found")
 
     user_account_ids = [
-        a.id for a in db.query(AWSAccount)
-        .filter(AWSAccount.user_id == current_user.id).all()
+        a.id for a in db.query(CloudAccount)
+        .filter(CloudAccount.user_id == current_user.id).all()
     ]
     if rec.account_id not in user_account_ids:
         raise HTTPException(status_code=403, detail="Access denied")

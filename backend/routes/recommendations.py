@@ -13,18 +13,18 @@ from models.cost_record import Recommendation
 from services.cleanup_advisor import generate_recommendations
 from services.security import get_current_user
 from models.user import User
-from models.account import AWSAccount
+from models.account import CloudAccount
 
 router = APIRouter(prefix="/recommendations", tags=["Recommendations"])
 
 
 def get_user_account_ids(db: Session, current_user: User, account_id: Optional[str] = None) -> List[str]:
     if account_id:
-        acc = db.query(AWSAccount).filter(AWSAccount.id == account_id, AWSAccount.user_id == current_user.id).first()
+        acc = db.query(CloudAccount).filter(CloudAccount.id == account_id, CloudAccount.user_id == current_user.id).first()
         if not acc:
             raise HTTPException(status_code=403, detail="Account not found or access denied")
         return [account_id]
-    accounts = db.query(AWSAccount).filter(AWSAccount.user_id == current_user.id).all()
+    accounts = db.query(CloudAccount).filter(CloudAccount.user_id == current_user.id).all()
     return [acc.id for acc in accounts]
 
 

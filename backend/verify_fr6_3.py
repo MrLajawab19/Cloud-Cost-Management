@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from database import SessionLocal
-from models.account import AWSAccount
+from models.account import CloudAccount
 from models.anomaly import Anomaly
 from models.cost_record import Recommendation
 from services.savings_plan_optimiser import generate_sp_recommendations
@@ -8,9 +8,15 @@ from datetime import datetime, timedelta
 
 def main():
     db = SessionLocal()
-    account = db.query(AWSAccount).first()
+    account = db.query(CloudAccount).first()
     
     print("\n--- 3. Anomaly Exclusion Case ---")
+    # Clean up existing anomaly for idempotency across test runs
+    db.query(Anomaly).filter_by(
+        account_id=account.id, service_type="EC2",
+        record_date=datetime.utcnow().date()
+    ).delete()
+    db.flush()
     anomaly = Anomaly(
         account_id=account.id,
         service_type="EC2",
@@ -19,8 +25,11 @@ def main():
         forecast_cost=50.0,
         residual=50.0,
         z_score=5.0,
-        severity="high",
-        direction="spike"
+        iqr_flagged=False,
+        severity="critical",
+        direction="spike",
+        driver_service="EC2",
+        is_resolved=False
     )
     db.add(anomaly)
     db.commit()

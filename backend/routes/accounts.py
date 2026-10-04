@@ -10,7 +10,7 @@ import boto3
 import botocore.exceptions
 
 from database import get_db
-from models.account import AWSAccount
+from models.account import CloudAccount
 from models.user import User
 from services.security import get_current_user, encrypt_secret
 
@@ -73,7 +73,7 @@ def create_account(account_in: AccountCreate, current_user: User = Depends(get_c
 
 @router.get("/", response_model=List[AccountResponse])
 def list_accounts(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    accounts = db.query(AWSAccount).filter(AWSAccount.user_id == current_user.id).all()
+    accounts = db.query(CloudAccount).filter(CloudAccount.user_id == current_user.id).all()
     results = []
     for acc in accounts:
         results.append({
@@ -86,7 +86,7 @@ def list_accounts(current_user: User = Depends(get_current_user), db: Session = 
 
 @router.delete("/{account_id}")
 def delete_account(account_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    acc = db.query(AWSAccount).filter(AWSAccount.id == account_id, AWSAccount.user_id == current_user.id).first()
+    acc = db.query(CloudAccount).filter(CloudAccount.id == account_id, CloudAccount.user_id == current_user.id).first()
     if not acc:
         raise HTTPException(status_code=404, detail="Account not found")
     

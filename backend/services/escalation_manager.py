@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from models.remediation import EscalationState
 from models.cost_record import Recommendation
-from models.account import AWSAccount
+from models.account import CloudAccount
 from models.anomaly import Anomaly
 from services.remediation_executor import execute_remediation
 
@@ -36,7 +36,7 @@ def process_escalations(db: Session):
             logger.info(f"Escalation {esc.id} cancelled (recommendation resolved or missing).")
             continue
             
-        account = db.query(AWSAccount).filter(AWSAccount.id == rec.account_id).first()
+        account = db.query(CloudAccount).filter(CloudAccount.id == rec.account_id).first()
         
         # Check if due for execution
         if now >= esc.due_at:
@@ -94,7 +94,7 @@ def process_auto_resizes(db: Session):
     
     count_executed = 0
     for rec in active_resizes:
-        account = db.query(AWSAccount).filter(AWSAccount.id == rec.account_id).first()
+        account = db.query(CloudAccount).filter(CloudAccount.id == rec.account_id).first()
         if (account and not account.auto_remediate_enabled) or rec.ignore_remediation:
             continue
             

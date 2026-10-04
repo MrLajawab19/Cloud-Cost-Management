@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 from sqlalchemy.orm import Session
 from models.remediation import RemediationLog
-from models.account import AWSAccount
+from models.account import CloudAccount
 from config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -13,7 +13,7 @@ def execute_remediation(db: Session, account_id: str, resource_id: str, action_t
     """
     Executes a remediation action with a strict safety guard.
     """
-    account = db.query(AWSAccount).filter(AWSAccount.id == account_id).first()
+    account = db.query(CloudAccount).filter(CloudAccount.id == account_id).first()
     if not account:
         logger.error(f"Account {account_id} not found for remediation.")
         return

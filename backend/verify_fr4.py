@@ -4,7 +4,7 @@ import os
 from sqlalchemy.orm import Session
 from database import SessionLocal
 from models.user import User
-from models.account import AWSAccount
+from models.account import CloudAccount
 from models.cost_record import Recommendation
 from services.what_if_simulator import run_simulation
 from services.ml_predictor import predict_costs
@@ -13,7 +13,7 @@ from services.cleanup_advisor import generate_recommendations
 def main():
     db = SessionLocal()
     
-    account = db.query(AWSAccount).first()
+    account = db.query(CloudAccount).first()
     user = db.query(User).filter(User.id == account.user_id).first()
     
     if not account:

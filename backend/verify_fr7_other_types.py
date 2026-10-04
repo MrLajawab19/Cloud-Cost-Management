@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from database import SessionLocal
-from models.account import AWSAccount
+from models.account import CloudAccount
 from models.resource import Resource
 from models.cost_record import Recommendation
 from services.cleanup_advisor import generate_recommendations
@@ -8,8 +8,13 @@ import uuid
 
 def main():
     db = SessionLocal()
-    account = db.query(AWSAccount).first()
+    account = db.query(CloudAccount).first()
     
+    # Idempotent cleanup of seed resources from prior runs
+    seed_ids = ["s3-empty-1", "s3-large-1", "rds-stopped-1", "lam-unused-1"]
+    db.query(Resource).filter(Resource.resource_id.in_(seed_ids)).delete(synchronize_session=False)
+    db.commit()
+
     # 1. Empty S3 Bucket
     res_s3_empty = Resource(
         id=uuid.uuid4(), account_id=account.id, resource_id="s3-empty-1", service_type="S3", region="us-east-1",
@@ -30,9 +35,10 @@ def main():
         id=uuid.uuid4(), account_id=account.id, resource_id="lam-unused-1", service_type="Lambda", region="us-east-1",
         request_count=0
     )
-    
+
     db.add_all([res_s3_empty, res_s3_large, res_rds, res_lam])
     db.commit()
+
     
     # Generate recommendations
     generate_recommendations(db)

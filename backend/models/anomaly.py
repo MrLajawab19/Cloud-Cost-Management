@@ -48,7 +48,7 @@ class Anomaly(Base):
     )
 
     id             = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    account_id     = Column(String(36), ForeignKey("aws_accounts.id", ondelete="CASCADE"),
+    account_id     = Column(String(36), ForeignKey("cloud_accounts.id", ondelete="CASCADE"),
                             nullable=False, index=True)
 
     service_type   = Column(String(50),  nullable=False, index=True)  # EC2|RDS|S3|Lambda|TOTAL

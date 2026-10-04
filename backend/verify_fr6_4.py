@@ -1,11 +1,11 @@
 from sqlalchemy.orm import Session
 from database import SessionLocal
-from models.account import AWSAccount
+from models.account import CloudAccount
 import services.savings_plan_optimiser
 
 def main():
     db = SessionLocal()
-    account = db.query(AWSAccount).first()
+    account = db.query(CloudAccount).first()
     
     print("\n--- 4. Denominator Guard Case ---")
     # Temporarily inject a synthetic CommitmentPricing entry where the monthly SP fee exceeds the on-demand forecast

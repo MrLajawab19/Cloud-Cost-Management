@@ -16,7 +16,7 @@ class RemediationLog(Base):
     __tablename__ = "remediation_logs"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    account_id = Column(String(36), ForeignKey("aws_accounts.id"), nullable=False)
+    account_id = Column(String(36), ForeignKey("cloud_accounts.id"), nullable=False)
     resource_id = Column(String(255), nullable=False)
     action_type = Column(String(50), nullable=False) # resize, stop
     status = Column(String(50), nullable=False) # simulated, executed, failed

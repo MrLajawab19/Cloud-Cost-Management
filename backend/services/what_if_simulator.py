@@ -39,7 +39,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from models.cost_record import Recommendation
-from models.account import AWSAccount
+from models.account import CloudAccount
 from services.ml_predictor import predict_costs
 
 logger = logging.getLogger(__name__)

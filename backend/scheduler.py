@@ -30,14 +30,14 @@ def run_collection_pipeline(user_id=None, account_id=None):
     logger.info("⏰ Scheduled collection pipeline started.")
     db = SessionLocal()
     try:
-        from models.account import AWSAccount
+        from models.account import CloudAccount
         from services.security import decrypt_secret
         
-        query = db.query(AWSAccount)
+        query = db.query(CloudAccount)
         if user_id:
-            query = query.filter(AWSAccount.user_id == user_id)
+            query = query.filter(CloudAccount.user_id == user_id)
         if account_id:
-            query = query.filter(AWSAccount.id == account_id)
+            query = query.filter(CloudAccount.id == account_id)
             
         accounts = query.all()
         if not accounts and not settings.demo_mode:

@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from database import SessionLocal
-from models.account import AWSAccount
+from models.account import CloudAccount
 from models.anomaly import Anomaly
 from models.cost_record import Recommendation
 from services.savings_plan_optimiser import generate_sp_recommendations
@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 
 def main():
     db = SessionLocal()
-    account = db.query(AWSAccount).first()
+    account = db.query(CloudAccount).first()
     if not account:
         print("No AWS Account found.")
         return
@@ -44,13 +44,26 @@ def main():
     # 3. Anomaly Exclusion Case
     print("\n--- 3. Anomaly Exclusion Case ---")
     if sp_rec:
+        # Clean up any existing anomaly for this service/date before inserting
+        db.query(Anomaly).filter_by(
+            account_id=account.id,
+            service_type=sp_rec.service_type,
+            record_date=datetime.utcnow().date()
+        ).delete()
+        db.flush()
         anomaly = Anomaly(
             account_id=account.id,
             service_type=sp_rec.service_type,
             record_date=datetime.utcnow().date(),
-            z_score=5.0,
+            actual_cost=150.0,
+            forecast_cost=50.0,
             residual=100.0,
-            severity="high"
+            z_score=5.0,
+            iqr_flagged=True,
+            severity="critical",
+            direction="spike",
+            driver_service=sp_rec.service_type,
+            is_resolved=False
         )
         db.add(anomaly)
         db.commit()
