@@ -162,7 +162,7 @@ export default function Dashboard() {
                   <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: 'var(--text-3)' }} dy={10} />
                   <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: 'var(--text-3)' }} dx={-10} tickFormatter={(v) => `$${v}`} />
                   <RechartsTooltip content={<CustomTooltip />} />
-                  <Area type="monotone" dataKey="total_cost_usd" stroke="var(--brand-aws-blue)" strokeWidth={2} fillOpacity={1} fill="url(#trendGrad)" />
+                  <Area type="monotone" dataKey="cost" stroke="var(--brand-aws-blue)" strokeWidth={2} fillOpacity={1} fill="url(#trendGrad)" />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
