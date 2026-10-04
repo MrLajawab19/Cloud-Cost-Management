@@ -59,6 +59,3 @@ class CloudAccount(Base):
         return f"<CloudAccount [{self.provider.upper()}] {self.name} ({self.region})>"
 
 
-# Backward-compatibility alias: any file that still imports AWSAccount by name
-# continues to work without modification. Remove after all references are updated.
-AWSAccount = CloudAccount
