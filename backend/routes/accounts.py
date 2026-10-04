@@ -2,7 +2,7 @@
 routes/accounts.py - CRUD for AWS Accounts
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import List, Optional
@@ -30,7 +30,7 @@ class AccountResponse(BaseModel):
     access_key_last_4: str
 
 @router.post("/", response_model=AccountResponse)
-def create_account(account_in: AccountCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def create_account(account_in: AccountCreate, background_tasks: BackgroundTasks, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     # 1. Verify credentials with AWS STS
     try:
         sts = boto3.client(
@@ -49,7 +49,7 @@ def create_account(account_in: AccountCreate, current_user: User = Depends(get_c
     # 2. Encrypt secret and save to DB
     encrypted_secret = encrypt_secret(account_in.secret_access_key)
     
-    new_account = AWSAccount(
+    new_account = CloudAccount(
         user_id=current_user.id,
         name=account_in.name,
         access_key_id=account_in.access_key_id,
@@ -60,9 +60,9 @@ def create_account(account_in: AccountCreate, current_user: User = Depends(get_c
     db.commit()
     db.refresh(new_account)
     
-    # Trigger collection pipeline immediately so data is ready for the frontend
+    # Trigger collection pipeline asynchronously so data is fetched without blocking UI
     from scheduler import run_collection_pipeline
-    run_collection_pipeline(user_id=current_user.id, account_id=new_account.id)
+    background_tasks.add_task(run_collection_pipeline, user_id=current_user.id, account_id=new_account.id)
     
     return {
         "id": new_account.id,

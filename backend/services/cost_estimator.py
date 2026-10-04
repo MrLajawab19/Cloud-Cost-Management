@@ -240,6 +240,7 @@ def get_daily_cost_trend(db: Session, account_ids: List[str], days: int = 30) ->
     """
     from sqlalchemy import func
     from datetime import timedelta
+    from models.anomaly import Anomaly
 
     if not account_ids:
         return []
@@ -258,7 +259,35 @@ def get_daily_cost_trend(db: Session, account_ids: List[str], days: int = 30) ->
         .all()
     )
 
+    baseline_map = {}
+    try:
+        from services.ml_predictor import _load_total_data
+        from services.anomaly_detector import _compute_fitted
+        X_tot, y_tot, dates_tot = _load_total_data(db, account_ids)
+        if len(X_tot) >= 7: # MIN_TRAINING_DAYS
+            fitted_arr = _compute_fitted(X_tot, y_tot, len(X_tot))
+            for i, d in enumerate(dates_tot):
+                baseline_map[d] = float(fitted_arr[i])
+    except Exception as e:
+        logger.warning(f"Failed to compute historical baseline for trend: {e}")
+
+    # Flag dates where ANY service had an unresolved anomaly
+    anomalies = (
+        db.query(Anomaly.record_date)
+        .filter(Anomaly.account_id.in_(account_ids))
+        .filter(Anomaly.record_date >= start_date)
+        .filter(Anomaly.is_resolved == False)
+        .distinct()
+        .all()
+    )
+    anomaly_dates = {a.record_date for a in anomalies}
+
     return [
-        {"date": str(row.record_date), "cost": round(row.total_daily_cost, 4)}
+        {
+            "date": str(row.record_date),
+            "cost": round(row.total_daily_cost, 4),
+            "forecast_cost_usd": round(baseline_map.get(row.record_date, row.total_daily_cost), 4),
+            "has_anomaly": row.record_date in anomaly_dates
+        }
         for row in rows
     ]
