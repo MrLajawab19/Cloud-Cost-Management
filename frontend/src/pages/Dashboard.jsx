@@ -92,6 +92,20 @@ export default function Dashboard() {
     )
   }
 
+  if (!data.summary) {
+    return (
+      <div className="page-content">
+        <div className="page-title" style={{ marginBottom: 'var(--s-4)' }}>Overview</div>
+        <div className="card" style={{ borderLeft: '4px solid var(--color-danger)' }}>
+          <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--color-danger)' }}>Failed to load dashboard data</div>
+          <div style={{ fontSize: 13, marginTop: 4, color: 'var(--text-2)' }}>
+            Ensure your cloud accounts are synced and the backend is running.
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   const { summary, trend, byService, topResources, recsSummary, recList, anomSummary } = data
   const highPriorityCount = (recsSummary?.by_severity?.critical || 0) + (recsSummary?.by_severity?.high || 0)
 
