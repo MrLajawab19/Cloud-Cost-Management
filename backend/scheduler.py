@@ -106,6 +106,11 @@ def run_collection_pipeline(user_id=None, account_id=None):
             from services.savings_plan_optimiser import generate_sp_recommendations
             for acc_id in detect_accounts:
                 generate_sp_recommendations(db, acc_id)
+                
+            # FR-7: process automations
+            from services.escalation_manager import process_auto_resizes, process_escalations
+            process_auto_resizes(db)
+            process_escalations(db)
 
         logger.info("✅ Collection pipeline complete.")
     except Exception as e:

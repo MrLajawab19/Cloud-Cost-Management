@@ -71,6 +71,9 @@ class Recommendation(Base):
     upfront_cost_usd      = Column(Float, nullable=True)
     payback_days          = Column(Integer, nullable=True)
 
+    remediation_type = Column(String(50), default="manual") # manual, resize, stop
+    ignore_remediation = Column(Boolean, default=False)
+
     is_resolved = Column(Boolean, default=False)
     created_at  = Column(DateTime, default=datetime.utcnow)
     updated_at  = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

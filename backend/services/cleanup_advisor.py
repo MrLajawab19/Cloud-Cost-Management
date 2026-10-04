@@ -1,31 +1,23 @@
 """
 services/cleanup_advisor.py
-────────────────────────────
+----------------------------
 Scans the Resource table and generates cleanup recommendations.
-
-Rules:
-  EC2  | CPU < 5% for 7+ days AND running       → "Underutilized Instance"
-  EC2  | status = stopped                        → "Stopped Instance (EBS cost)"
-  S3   | 0 objects AND 0 requests                → "Empty Bucket"
-  S3   | > 500 GB AND 0 requests for 30 days     → "Large Unused Bucket"
-  RDS  | status = stopped                        → "Stopped RDS (storage cost)"
-  Lambda | 0 invocations for 30 days             → "Unused Lambda Function"
 """
 
 import logging
 from datetime import datetime
 from typing import List, Dict, Any
 from sqlalchemy.orm import Session
+import uuid
 
 from models.resource import Resource
 from models.cost_record import Recommendation
+from models.remediation import EscalationState
 
 logger = logging.getLogger(__name__)
 
-# Severity thresholds
-HIGH_SAVINGS_THRESHOLD   = 50.0   # USD/month → high severity
-MEDIUM_SAVINGS_THRESHOLD = 10.0   # USD/month → medium
-
+HIGH_SAVINGS_THRESHOLD   = 50.0   
+MEDIUM_SAVINGS_THRESHOLD = 10.0   
 
 def _severity(monthly_cost: float) -> str:
     if monthly_cost >= HIGH_SAVINGS_THRESHOLD:
@@ -36,162 +28,192 @@ def _severity(monthly_cost: float) -> str:
         return "low"
     return "low"
 
-
 def generate_recommendations(db: Session) -> int:
     """
-    Clear old recommendations and regenerate from current resource state.
-    Returns count of new recommendations created.
+    Generate or update recommendations using UPSERT.
+    Resolves stale recommendations if their resource condition changed.
     """
-    # Clear existing unresolved recommendations
-    db.query(Recommendation).filter(Recommendation.is_resolved == False).delete()
-    db.commit()
-
-    resources: List[Resource] = db.query(Resource).all()
-    recs = []
+    resources = db.query(Resource).all()
+    
+    # We will collect all generated natural keys to find stale ones.
+    # Natural key: (account_id, resource_id, issue)
+    current_cycle_keys = set()
+    new_recs_count = 0
 
     for r in resources:
         cost = r.estimated_monthly_cost or 0.0
-
-        # ── EC2 Rules ────────────────────────────────────────────
+        
+        # -- EC2 Rules --------------------------------------------
         if r.service_type == "EC2":
-
-            if r.status == "running" and (r.cpu_utilization_avg or 0) < 5.0 \
-                    and (r.runtime_hours or 0) > 168:
-                recs.append(Recommendation(
-                    account_id=r.account_id,
-                    resource_id=r.resource_id,
-                    resource_name=r.resource_name or r.resource_id,
-                    service_type="EC2",
-                    region=r.region,
-                    issue="Underutilized EC2 Instance",
-                    description=(
-                        f"Instance {r.resource_name} ({r.resource_type}) has been running "
-                        f"for {int((r.runtime_hours or 0) / 24)} days with an average CPU "
-                        f"utilization of only {r.cpu_utilization_avg:.1f}%. "
-                        f"This is well below the 5% idle threshold."
-                    ),
-                    action=(
-                        "Consider downsizing to a smaller instance type, switching to "
-                        "a Spot/Reserved instance, or terminating if no longer needed."
-                    ),
-                    severity=_severity(cost),
-                    potential_savings_usd=round(cost * 0.6, 2),  # ~60% savings by downsizing
-                ))
+            if r.status == "running" and (r.runtime_hours or 0) > 168:
+                cpu = r.cpu_utilization_avg or 0
+                
+                # Rule 1: Idle EC2 (Stop)
+                if cpu < 1.0:
+                    _upsert_rec(db, current_cycle_keys, r, 
+                        issue="Idle EC2 Instance",
+                        desc=f"Instance {r.resource_name} ({r.resource_type}) has {cpu:.1f}% CPU. It is completely idle.",
+                        action="Stop the instance.",
+                        remediation_type="stop",
+                        severity=_severity(cost),
+                        savings=cost)
+                        
+                # Rule 2: Underutilized EC2 (Resize)
+                elif 1.0 <= cpu < 5.0:
+                    _upsert_rec(db, current_cycle_keys, r, 
+                        issue="Underutilized EC2 Instance",
+                        desc=f"Instance {r.resource_name} ({r.resource_type}) has {cpu:.1f}% CPU. It is underutilized.",
+                        action="Consider downsizing to a smaller instance type.",
+                        remediation_type="resize",
+                        severity=_severity(cost),
+                        savings=round(cost * 0.6, 2))
 
             if r.status == "stopped":
-                ebs_cost = 0.10 * 30  # estimate 30 GB EBS at $0.10/GB
-                recs.append(Recommendation(
-                    account_id=r.account_id,
-                    resource_id=r.resource_id,
-                    resource_name=r.resource_name or r.resource_id,
-                    service_type="EC2",
-                    region=r.region,
+                ebs_cost = 0.10 * 30 
+                _upsert_rec(db, current_cycle_keys, r, 
                     issue="Stopped EC2 (EBS Costs Still Accruing)",
-                    description=(
-                        f"Instance {r.resource_name} is stopped but its EBS volumes "
-                        f"continue to incur storage charges (~${ebs_cost:.2f}/month estimated)."
-                    ),
-                    action=(
-                        "Create an AMI snapshot, then terminate the instance and detach "
-                        "unused EBS volumes to eliminate ongoing storage costs."
-                    ),
+                    desc=f"Instance {r.resource_name} is stopped but its EBS volumes incur ~${ebs_cost:.2f}/month.",
+                    action="Create an AMI snapshot, then terminate.",
+                    remediation_type="manual",
                     severity="medium",
-                    potential_savings_usd=round(ebs_cost, 2),
-                ))
+                    savings=round(ebs_cost, 2))
 
-        # ── S3 Rules ─────────────────────────────────────────────
+        # -- S3 Rules ---------------------------------------------
         elif r.service_type == "S3":
-
             if (r.storage_size_gb or 0) < 0.001 and (r.request_count or 0) == 0:
-                recs.append(Recommendation(
-                    account_id=r.account_id,
-                    resource_id=r.resource_id,
-                    resource_name=r.resource_name,
-                    service_type="S3",
-                    region=r.region,
+                _upsert_rec(db, current_cycle_keys, r, 
                     issue="Empty S3 Bucket",
-                    description=(
-                        f"Bucket '{r.resource_name}' contains no objects and has received "
-                        f"no requests. It may be a leftover from a deprecated feature."
-                    ),
-                    action=(
-                        "Verify the bucket is not referenced by any active application, "
-                        "then delete it to keep your account tidy."
-                    ),
+                    desc=f"Bucket '{r.resource_name}' contains no objects and 0 requests.",
+                    action="Delete the bucket.",
+                    remediation_type="manual",
                     severity="low",
-                    potential_savings_usd=0.0,
-                ))
+                    savings=0.0)
 
             elif (r.storage_size_gb or 0) > 500 and (r.request_count or 0) == 0:
-                recs.append(Recommendation(
-                    account_id=r.account_id,
-                    resource_id=r.resource_id,
-                    resource_name=r.resource_name,
-                    service_type="S3",
-                    region=r.region,
+                _upsert_rec(db, current_cycle_keys, r, 
                     issue="Large Unused S3 Bucket",
-                    description=(
-                        f"Bucket '{r.resource_name}' holds {r.storage_size_gb:.1f} GB "
-                        f"but has received zero requests. This data may be stale."
-                    ),
-                    action=(
-                        "Review bucket contents. Move infrequently accessed data to "
-                        "S3 Glacier (90% cheaper) or delete if no longer needed."
-                    ),
+                    desc=f"Bucket '{r.resource_name}' holds {r.storage_size_gb:.1f} GB with zero requests.",
+                    action="Move to Glacier or delete.",
+                    remediation_type="manual",
                     severity=_severity(cost),
-                    potential_savings_usd=round(cost * 0.9, 2),
-                ))
+                    savings=round(cost * 0.9, 2))
 
-        # ── RDS Rules ────────────────────────────────────────────
+        # -- RDS Rules --------------------------------------------
         elif r.service_type == "RDS":
-
             if r.status == "stopped":
-                recs.append(Recommendation(
-                    account_id=r.account_id,
-                    resource_id=r.resource_id,
-                    resource_name=r.resource_name,
-                    service_type="RDS",
-                    region=r.region,
+                _upsert_rec(db, current_cycle_keys, r, 
                     issue="Stopped RDS Instance (Storage Cost)",
-                    description=(
-                        f"RDS instance '{r.resource_name}' is stopped but you are still "
-                        f"being charged for {r.storage_size_gb or 0:.0f} GB of storage "
-                        f"at ~$0.115/GB/month."
-                    ),
-                    action=(
-                        "Take a final snapshot and delete the instance if no longer needed. "
-                        "Restore from snapshot when required."
-                    ),
+                    desc=f"RDS '{r.resource_name}' is stopped but charged for {(r.storage_size_gb or 0):.0f} GB.",
+                    action="Take snapshot and delete.",
+                    remediation_type="manual",
                     severity="medium",
-                    potential_savings_usd=round((r.storage_size_gb or 0) * 0.115, 2),
-                ))
+                    savings=round((r.storage_size_gb or 0) * 0.115, 2))
 
-        # ── Lambda Rules ─────────────────────────────────────────
+        # -- Lambda Rules -----------------------------------------
         elif r.service_type == "Lambda":
-
             if (r.request_count or 0) == 0:
-                recs.append(Recommendation(
-                    account_id=r.account_id,
-                    resource_id=r.resource_id,
-                    resource_name=r.resource_name,
-                    service_type="Lambda",
-                    region=r.region,
+                _upsert_rec(db, current_cycle_keys, r, 
                     issue="Unused Lambda Function",
-                    description=(
-                        f"Lambda function '{r.resource_name}' has had zero invocations "
-                        f"in the past 30 days. It may be an orphaned deployment."
-                    ),
-                    action=(
-                        "Verify the function is not triggered by a rare schedule. "
-                        "If unused, delete it to reduce attack surface and clutter."
-                    ),
+                    desc=f"Lambda '{r.resource_name}' has 0 invocations in 30 days.",
+                    action="Delete the function.",
+                    remediation_type="manual",
                     severity="low",
-                    potential_savings_usd=0.0,
-                ))
+                    savings=0.0)
 
-    if recs:
-        db.add_all(recs)
-        db.commit()
+    db.commit()
+    
+    # --- STALE CLEANUP PHASE ---
+    # Scoped explicitly to the set of issues generated by cleanup_advisor.
+    # This prevents blindly resolving SP recommendations or other external sources.
+    ADVISOR_ISSUES = [
+        "Idle EC2 Instance",
+        "Underutilized EC2 Instance",
+        "Stopped EC2 (EBS Costs Still Accruing)",
+        "Empty S3 Bucket",
+        "Large Unused S3 Bucket",
+        "Stopped RDS Instance (Storage Cost)",
+        "Unused Lambda Function"
+    ]
+    
+    all_active = db.query(Recommendation).filter(
+        Recommendation.is_resolved == False,
+        Recommendation.issue.in_(ADVISOR_ISSUES)
+    ).all()
+    
+    stale_count = 0
+    for rec in all_active:
+        key = (rec.account_id, rec.resource_id, rec.issue)
+        if key not in current_cycle_keys:
+            # Mark as resolved
+            rec.is_resolved = True
+            rec.resolved_at = datetime.utcnow()
+            stale_count += 1
+            
+            # Cancel any associated pending escalation
+            escalation = db.query(EscalationState).filter(
+                EscalationState.recommendation_id == str(rec.id),
+                EscalationState.status.in_(["pending", "escalated"])
+            ).first()
+            if escalation:
+                escalation.status = "cancelled"
+                logger.info(f"Cancelled escalation {escalation.id} because recommendation went stale.")
+                
+    db.commit()
+    logger.info(f"Generated/Updated recs. Stale resolved: {stale_count}.")
+    return len(current_cycle_keys)
 
-    logger.info(f"Generated {len(recs)} cleanup recommendations.")
-    return len(recs)
+def _upsert_rec(db: Session, keys_set: set, r: Resource, issue: str, desc: str, action: str, remediation_type: str, severity: str, savings: float):
+    # Natural key check
+    key = (r.account_id, r.resource_id, issue)
+    keys_set.add(key)
+    
+    # Look for existing unresolved recommendation with this key
+    existing = db.query(Recommendation).filter(
+        Recommendation.account_id == r.account_id,
+        Recommendation.resource_id == r.resource_id,
+        Recommendation.issue == issue,
+        Recommendation.is_resolved == False
+    ).first()
+    
+    if existing:
+        # Update fields (e.g. savings might have changed)
+        existing.description = desc
+        existing.action = action
+        existing.severity = severity
+        existing.potential_savings_usd = savings
+        existing.remediation_type = remediation_type
+    else:
+        # Create new
+        new_rec = Recommendation(
+            id=uuid.uuid4(),
+            account_id=r.account_id,
+            resource_id=r.resource_id,
+            resource_name=r.resource_name or r.resource_id,
+            service_type=r.service_type,
+            region=r.region,
+            issue=issue,
+            description=desc,
+            action=action,
+            severity=severity,
+            potential_savings_usd=savings,
+            remediation_type=remediation_type
+        )
+        db.add(new_rec)
+        db.flush() # ensure new_rec.id is available
+        
+        # If it's a "stop" action, generate EscalationState immediately.
+        # It's created ONLY ONCE on INSERT.
+        if remediation_type == "stop":
+            from models.account import AWSAccount
+            from datetime import timedelta
+            account = db.query(AWSAccount).filter(AWSAccount.id == r.account_id).first()
+            grace_hours = account.grace_period_hours if account else 48
+            
+            escalation = EscalationState(
+                id=str(uuid.uuid4()),
+                recommendation_id=str(new_rec.id),
+                status="pending",
+                due_at=datetime.utcnow() + timedelta(hours=grace_hours)
+            )
+            db.add(escalation)
+

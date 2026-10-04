@@ -21,6 +21,12 @@ class AWSAccount(Base):
     access_key_id = Column(String(255), nullable=False)
     encrypted_secret_key = Column(String(500), nullable=False)
 
+    # FR-7 automated remediation settings
+    from sqlalchemy import Boolean, Float, Integer
+    auto_remediate_enabled = Column(Boolean, default=False)
+    budget_threshold_usd = Column(Float, nullable=True)
+    grace_period_hours = Column(Integer, default=48)
+
     created_at = Column(DateTime, default=datetime.utcnow)
 
     def __repr__(self):
