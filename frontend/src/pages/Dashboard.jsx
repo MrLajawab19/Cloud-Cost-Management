@@ -56,26 +56,27 @@ export default function Dashboard() {
   useEffect(() => {
     async function load() {
       try {
+        // Each call is individually caught so one failure doesn't crash the whole dashboard
         const [sum, tr, bs, top, recSum, rList, anomSum] = await Promise.all([
-          costsAPI.summary(),
-          costsAPI.trend(30),
-          costsAPI.byService(),
-          costsAPI.topResources(5),
-          recommendationsAPI.summary(),
-          recommendationsAPI.list(),
+          costsAPI.summary().catch(() => ({ data: null })),
+          costsAPI.trend(30).catch(() => ({ data: { trend: [] } })),
+          costsAPI.byService().catch(() => ({ data: [] })),
+          costsAPI.topResources(5).catch(() => ({ data: [] })),
+          recommendationsAPI.summary().catch(() => ({ data: null })),
+          recommendationsAPI.list().catch(() => ({ data: [] })),
           anomaliesAPI.getSummary({ days: 30 }).catch(() => ({ data: null })),
         ])
         setData({
           summary: sum.data,
-          trend: tr.data.trend || [],
-          byService: bs.data,
-          topResources: top.data,
+          trend: Array.isArray(tr.data?.trend) ? tr.data.trend : (Array.isArray(tr.data) ? tr.data : []),
+          byService: Array.isArray(bs.data) ? bs.data : [],
+          topResources: Array.isArray(top.data) ? top.data : [],
           recsSummary: recSum.data,
-          recList: rList.data || [],
+          recList: Array.isArray(rList.data) ? rList.data : [],
           anomSummary: anomSum.data,
         })
       } catch (e) {
-        console.error(e)
+        console.error('Dashboard load error:', e)
       } finally {
         setLoading(false)
       }
@@ -306,7 +307,7 @@ export default function Dashboard() {
                   </button>
                 </div>
                 <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-success)' }}>
-                  +${r.potential_savings_usd.toFixed(2)}
+                  +${(r.potential_savings_usd || 0).toFixed(2)}
                 </div>
               </div>
             )) : (
