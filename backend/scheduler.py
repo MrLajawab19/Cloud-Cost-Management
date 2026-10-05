@@ -48,6 +48,11 @@ def run_collection_pipeline(user_id=None, account_id=None):
         synced_account_ids = []
         if settings.demo_mode:
             all_resources = aws_collector.collect_demo_data()
+            if accounts:
+                demo_acc_id = accounts[0].id
+                for r in all_resources:
+                    r["account_id"] = demo_acc_id
+                synced_account_ids.append(demo_acc_id)
             logger.info("DEMO MODE: Using simulated AWS data.")
         else:
             for acc in accounts:

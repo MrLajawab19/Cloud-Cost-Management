@@ -13,6 +13,7 @@ from database import get_db
 from models.account import CloudAccount
 from models.user import User
 from services.security import get_current_user, encrypt_secret
+from config import get_settings
 
 router = APIRouter(prefix="/accounts", tags=["accounts"])
 
@@ -31,23 +32,26 @@ class AccountResponse(BaseModel):
 
 @router.post("/", response_model=AccountResponse)
 def create_account(account_in: AccountCreate, background_tasks: BackgroundTasks, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    settings = get_settings()
+    
     # 1. Verify credentials with AWS STS
-    try:
-        sts = boto3.client(
-            'sts',
-            aws_access_key_id=account_in.access_key_id,
-            aws_secret_access_key=account_in.secret_access_key,
-            region_name=account_in.region
-        )
-        # If this succeeds, credentials are valid
-        identity = sts.get_caller_identity()
-    except botocore.exceptions.ClientError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid AWS Credentials: {e}")
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"AWS connection error: {e}")
+    if not settings.demo_mode:
+        try:
+            sts = boto3.client(
+                'sts',
+                aws_access_key_id=account_in.access_key_id,
+                aws_secret_access_key=account_in.secret_access_key,
+                region_name=account_in.region
+            )
+            # If this succeeds, credentials are valid
+            identity = sts.get_caller_identity()
+        except botocore.exceptions.ClientError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid AWS Credentials: {e}")
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"AWS connection error: {e}")
 
     # 2. Encrypt secret and save to DB
-    encrypted_secret = encrypt_secret(account_in.secret_access_key)
+    encrypted_secret = "" if settings.demo_mode else encrypt_secret(account_in.secret_access_key)
     
     new_account = CloudAccount(
         user_id=current_user.id,

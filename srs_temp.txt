@@ -340,11 +340,11 @@ ID
 Status
 Implementation Note
 FR-8.1
-Partial
-Dashboard, Resources, Costs, Recommendations, and Predictions pages exist; anomaly and simulation views do not yet.
+Completed
+Dashboard trend charts, anomalies, top resources, and top recommendations are all implemented in the single page. Simulation results can be viewed on-demand by clicking Simulate on any recommendation.
 FR-8.2
-Not Started
-Depends on FR-3 (Anomaly Detection) existing to visually distinguish.
+Completed
+Anomaly alerts are visually distinguished on the dashboard trend chart as red dots, overlaid on the dashed forecast baseline.
 Also implemented, outside the current functional scope but supporting it operationally: multi-account SaaS model with per-account data scoping, JWT + bcrypt authentication, Fernet-encrypted credential storage, and a Docker Compose deployment (SQLite for local development, PostgreSQL for production).
 7. Recommended Build Order & Module Dependencies
 The following order reflects functional dependencies between modules (e.g. FR-6.4 and FR-7.6 require FR-3's anomaly flag to exist) and is recommended for the remainder of the Design & Development phase:

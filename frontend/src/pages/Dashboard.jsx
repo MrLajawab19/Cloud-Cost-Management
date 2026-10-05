@@ -132,7 +132,7 @@ export default function Dashboard() {
           <div className="metric-top">
             <div className="metric-label">Total Resources</div>
           </div>
-          <div className="metric-value" style={{ color: 'var(--brand-aws-blue)' }}>{summary?.resource_count || 0}</div>
+          <div className="metric-value" style={{ color: 'var(--brand-aws-blue)' }}>{summary?.total_resources || 0}</div>
           <div className="metric-sub">{summary?.idle_resources || 0} idle</div>
         </div>
 
@@ -272,7 +272,7 @@ export default function Dashboard() {
                     <td>{r.region}</td>
                     <td><span className={`badge badge-${r.status.toLowerCase()}`}>{r.status}</span></td>
                     <td style={{ textAlign: 'right', fontWeight: 700 }}>
-                      ${(r.estimated_monthly_cost || 0).toFixed(2)}
+                      ${(r.monthly_cost || 0).toFixed(2)}
                     </td>
                   </tr>
                 )) : (
