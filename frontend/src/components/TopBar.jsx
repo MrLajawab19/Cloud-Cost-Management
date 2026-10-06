@@ -91,7 +91,7 @@ export default function TopBar({ toggleSidebar }) {
           <Menu size={20} color="white" />
         </button>
         <CloudCog size={20} color="#ec7211" strokeWidth={2} />
-        <div className="topbar-brand-name">AWS CloudCost</div>
+        <div className="topbar-brand-name">CloudCost</div>
       </div>
 
       <div className="topbar-breadcrumb">
@@ -118,7 +118,7 @@ export default function TopBar({ toggleSidebar }) {
           
           {activeMenu === 'account' && (
             <div className="dropdown-menu">
-              <div className="dropdown-header">AWS Accounts</div>
+              <div className="dropdown-header">Cloud Accounts</div>
               {accounts.map(acc => (
                 <div 
                   key={acc.id} 
@@ -155,7 +155,7 @@ export default function TopBar({ toggleSidebar }) {
                 style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--accent-primary)' }}
                 onClick={() => { setShowAddAccount(true); setActiveMenu(null) }}
               >
-                <Plus size={14} /> Add AWS Account
+                <Plus size={14} /> Add Cloud Account
               </div>
             </div>
           )}
@@ -239,7 +239,7 @@ export default function TopBar({ toggleSidebar }) {
       {refreshing && (
         <div className="page-loading-overlay">
           <RefreshCw size={40} className="spinner-icon" />
-          <div className="loading-text">Syncing AWS Resources...</div>
+          <div className="loading-text">Syncing Cloud Resources...</div>
         </div>
       )}
     </header>

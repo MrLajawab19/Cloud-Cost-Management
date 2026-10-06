@@ -114,7 +114,7 @@ export default function Dashboard() {
     <div className="page-content">
       <div className="page-header">
         <div className="page-title">Overview</div>
-        <div className="page-subtitle">Real-time AWS resource usage and cost estimates</div>
+        <div className="page-subtitle">Real-time cloud resource usage and cost estimates</div>
       </div>
       
       {/* Metric Cards - 6 columns to fill space */}

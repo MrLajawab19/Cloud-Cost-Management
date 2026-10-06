@@ -210,3 +210,31 @@
   transform: none !important;
   box-shadow: none !important;
 }
+
+.provider-tabs {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #475569;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tab-btn.active {
+  background: var(--brand-aws-orange, #ec7211);
+  color: white;
+  border-color: var(--brand-aws-orange, #ec7211);
+}
+
+.tab-btn:hover:not(.active) {
+  background: #e2e8f0;
+}

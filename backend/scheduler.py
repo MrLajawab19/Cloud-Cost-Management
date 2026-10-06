@@ -47,13 +47,20 @@ def run_collection_pipeline(user_id=None, account_id=None):
         all_resources = []
         synced_account_ids = []
         if settings.demo_mode:
-            all_resources = aws_collector.collect_demo_data()
-            if accounts:
-                demo_acc_id = accounts[0].id
-                for r in all_resources:
-                    r["account_id"] = demo_acc_id
-                synced_account_ids.append(demo_acc_id)
-            logger.info("DEMO MODE: Using simulated AWS data.")
+            for acc in accounts:
+                if acc.provider == 'aws':
+                    from services import aws_collector
+                    resources = aws_collector.collect_demo_data()
+                elif acc.provider == 'azure':
+                    from services import azure_collector
+                    resources = azure_collector.collect_demo_data()
+                else:
+                    continue
+                for r in resources:
+                    r["account_id"] = acc.id
+                all_resources.extend(resources)
+                synced_account_ids.append(acc.id)
+            logger.info("DEMO MODE: Using simulated AWS and Azure data.")
         else:
             for acc in accounts:
                 try:
@@ -80,7 +87,9 @@ def run_collection_pipeline(user_id=None, account_id=None):
         target_accounts_map = {acc.id: acc for acc in accounts}
         for acc_id in (synced_account_ids if synced_account_ids else [acc.id for acc in accounts]):
             acc = target_accounts_map.get(acc_id)
-            has_real_creds = acc and acc.encrypted_secret_key and len(acc.encrypted_secret_key.strip()) > 0
+            is_aws_real = acc and acc.provider == 'aws' and acc.encrypted_secret_key and len(acc.encrypted_secret_key.strip()) > 0
+            is_azure_real = acc and acc.provider == 'azure' and acc.encrypted_client_secret and len(acc.encrypted_client_secret.strip()) > 0
+            has_real_creds = is_aws_real or is_azure_real
             if not settings.demo_mode:
                 logger.debug(
                     "seed_historical_data: skipping account %s — demo_mode is False.", acc_id[:8]

@@ -41,7 +41,7 @@ export default function Sidebar({ isOpen, closeSidebar }) {
 
       {/* Nav */}
       <nav className="sidebar-nav">
-        <div className="nav-group-label" style={{ paddingLeft: '20px' }}>AWS Services</div>
+        <div className="nav-group-label" style={{ paddingLeft: '20px' }}>Cloud Services</div>
         {navItems.map(({ to, icon: Icon, label, end, badge }) => (
           <NavLink
             key={to}

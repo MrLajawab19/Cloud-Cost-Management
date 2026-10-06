@@ -76,10 +76,31 @@ def seed_historical_data(
     rng     = random.Random(account_id)  # deterministic per-account seed
     inserted = 0
 
+    from models.account import CloudAccount
+    from config import settings
+    
+    acc = db.query(CloudAccount).filter(CloudAccount.id == account_id).first()
+    
+    is_aws_real = acc and acc.provider == 'aws' and acc.encrypted_secret_key and len(acc.encrypted_secret_key.strip()) > 0
+    is_azure_real = acc and acc.provider == 'azure' and acc.encrypted_client_secret and len(acc.encrypted_client_secret.strip()) > 0
+    has_real_creds = is_aws_real or is_azure_real
+    
+    if not settings.demo_mode or has_real_creds:
+        logger.warning(
+            "seed_historical_data aborted: account %s is not in safe demo mode.",
+            account_id[:8]
+        )
+        return 0
+
+    if acc and acc.provider == 'azure':
+        profiles = {"AzureVM": {"base_daily": 14.05, "noise_pct": 0.08, "trend_per_day": 0.004}}
+    else:
+        profiles = _SEED_SERVICE_PROFILES
+
     for day_offset in range(days, 0, -1):
         record_date = today - timedelta(days=day_offset)
 
-        for svc, profile in _SEED_SERVICE_PROFILES.items():
+        for svc, profile in profiles.items():
             if record_date in written_dates:
                 continue  # skip already-present date for any service
 
@@ -107,7 +128,7 @@ def seed_historical_data(
         db.commit()
         logger.info(
             "seed_historical_data: inserted %d records for account %s (%d days × %d services).",
-            inserted, account_id[:8], days, len(_SEED_SERVICE_PROFILES),
+            inserted, account_id[:8], days, len(profiles),
         )
     return inserted
 

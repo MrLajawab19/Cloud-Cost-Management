@@ -202,7 +202,7 @@ def run_simulation(
         baseline_30d = total_30d  # conservative: treat total as baseline
 
     # ── Compute simulation ───────────────────────────────────────
-    if rec.action == "Purchase Savings Plan":
+    if rec.action in ["Purchase Savings Plan", "Purchase Reserved VM Instance"]:
         # SPs redefine the monthly cost structure. The new simulated monthly cost 
         # is the baseline minus the established monthly savings of the plan.
         delta_usd      = min(savings_usd, baseline_30d)

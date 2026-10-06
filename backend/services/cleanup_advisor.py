@@ -120,6 +120,28 @@ def generate_recommendations(db: Session) -> int:
                     severity="low",
                     savings=0.0)
 
+        # -- AzureVM Rules ----------------------------------------
+        elif r.service_type == "AzureVM":
+            if r.status == "running":
+                # Real CPU metrics from Azure Monitor (or None if missing/unavailable)
+                cpu = r.cpu_utilization_avg or 0.0
+                if cpu < 1.0:
+                    _upsert_rec(db, current_cycle_keys, r, 
+                        issue="Idle AzureVM",
+                        desc=f"Azure VM {r.resource_name} ({r.resource_type}) is completely idle.",
+                        action="Stop the instance.",
+                        remediation_type="manual",
+                        severity=_severity(cost),
+                        savings=cost)
+                elif 1.0 <= cpu < 5.0:
+                    _upsert_rec(db, current_cycle_keys, r, 
+                        issue="Underutilized AzureVM",
+                        desc=f"Azure VM {r.resource_name} ({r.resource_type}) is underutilized.",
+                        action="Consider downsizing to a smaller instance type.",
+                        remediation_type="manual",
+                        severity=_severity(cost),
+                        savings=round(cost * 0.6, 2))
+
     db.commit()
     
     # --- STALE CLEANUP PHASE ---
@@ -132,7 +154,9 @@ def generate_recommendations(db: Session) -> int:
         "Empty S3 Bucket",
         "Large Unused S3 Bucket",
         "Stopped RDS Instance (Storage Cost)",
-        "Unused Lambda Function"
+        "Unused Lambda Function",
+        "Idle AzureVM",
+        "Underutilized AzureVM"
     ]
     
     all_active = db.query(Recommendation).filter(

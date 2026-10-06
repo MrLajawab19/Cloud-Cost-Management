@@ -16,6 +16,11 @@ _MOCK_PRICING = {
     "upfront_pct": 0.50,   # 50% paid upfront
 }
 
+_AZURE_MOCK_PRICING = {
+    "discount_pct": 0.25,  # 25% discount
+    "upfront_pct": 0.50,   # 50% paid upfront
+}
+
 def generate_sp_recommendations(db: Session, account_id: str) -> List[Recommendation]:
     """
     Generate Savings Plan recommendations for stable services (FR-6).
@@ -46,8 +51,21 @@ def generate_sp_recommendations(db: Session, account_id: str) -> List[Recommenda
             continue
             
         # Synthetic pricing logic (Partial Upfront, 1-Year mock)
-        discount_factor = 1.0 - _MOCK_PRICING.get("discount_pct", 0.30)
-        upfront_pct = _MOCK_PRICING.get("upfront_pct", 0.50)
+        if srv == "AzureVM":
+            discount_factor = 1.0 - _AZURE_MOCK_PRICING.get("discount_pct", 0.25)
+            upfront_pct = _AZURE_MOCK_PRICING.get("upfront_pct", 0.50)
+            rec_id = "AzureVM-RI-1YR"
+            rec_name = "AzureVM 1-Year Reserved Instance"
+            action = "Purchase Reserved VM Instance"
+            desc = f"Consistent {srv} usage detected. Purchasing a 1-Year Reserved Instance can reduce effective costs by 25%."
+        else:
+            discount_factor = 1.0 - _MOCK_PRICING.get("discount_pct", 0.30)
+            upfront_pct = _MOCK_PRICING.get("upfront_pct", 0.50)
+            rec_id = f"{srv}-SP-1YR"
+            rec_name = f"{srv} 1-Year Savings Plan"
+            action = "Purchase Savings Plan"
+            desc = f"Consistent {srv} usage detected. Purchasing a 1-Year Savings Plan can reduce effective costs by 30%."
+
         monthly_pct = 1.0 - upfront_pct
         
         discounted_30d = baseline_30d * discount_factor
@@ -69,18 +87,18 @@ def generate_sp_recommendations(db: Session, account_id: str) -> List[Recommenda
             db.query(Recommendation).filter(
                 Recommendation.account_id == account_id,
                 Recommendation.service_type == srv,
-                Recommendation.action == "Purchase Savings Plan"
+                Recommendation.action == action
             ).delete(synchronize_session=False)
             
             rec = Recommendation(
                 account_id=account_id,
-                resource_id=f"{srv}-SP-1YR",
-                resource_name=f"{srv} 1-Year Savings Plan",
+                resource_id=rec_id,
+                resource_name=rec_name,
                 service_type=srv,
                 region="global",
                 issue="No Commitment",
-                description=f"Consistent {srv} usage detected. Purchasing a 1-Year Savings Plan can reduce effective costs by 30%.",
-                action="Purchase Savings Plan",
+                description=desc,
+                action=action,
                 severity="medium",
                 potential_savings_usd=monthly_savings,
                 upfront_cost_usd=upfront_cost,
