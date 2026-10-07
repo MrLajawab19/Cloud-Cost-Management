@@ -12,12 +12,13 @@ import Anomalies       from './pages/Anomalies'
 import Simulations     from './pages/Simulations'
 import Login           from './pages/Login'
 import Register        from './pages/Register'
+import HomePage        from './pages/HomePage'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
   if (loading) return <div className="loading-screen">Loading...</div>
-  if (!user) return <Navigate to="/login" />
+  if (!user) return <Navigate to="/" />
   return children
 }
 
@@ -33,7 +34,7 @@ function MainLayout() {
       <div className={`main-content ${isSidebarOpen ? 'sidebar-open' : ''}`}>
         <TopBar toggleSidebar={toggleSidebar} />
         <Routes>
-          <Route path="/"                index element={<Dashboard />}       />
+          <Route path="/dashboard"       element={<Dashboard />}       />
           <Route path="/resources"       element={<Resources />}       />
           <Route path="/costs"           element={<Costs />}           />
           <Route path="/recommendations" element={<Recommendations />} />
@@ -51,6 +52,7 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
+          <Route path="/" element={<HomePage />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/*" element={

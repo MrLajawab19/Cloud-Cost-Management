@@ -8,7 +8,7 @@ import {
 import { recommendationsAPI, anomaliesAPI } from '../api/client'
 
 const navItems = [
-  { to: '/',                icon: LayoutDashboard, label: 'Dashboard',       end: true  },
+  { to: '/dashboard',       icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/resources',       icon: Server,          label: 'Resources'                   },
   { to: '/costs',           icon: DollarSign,      label: 'Cost Analysis'               },
   { to: '/recommendations', icon: Lightbulb,       label: 'Recommendations', badge: 'rec' },
