@@ -91,7 +91,7 @@ export function AuthProvider({ children }) {
       window.location.reload()
     } catch (err) {
       console.error("Failed to delete account", err)
-      alert("Failed to delete account. Please try again.")
+      alert("Error deleting account: " + (err.message || String(err)))
     }
   }
 

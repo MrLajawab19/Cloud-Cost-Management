@@ -101,7 +101,7 @@ def collect_all(
                 "type": "ActualCost",
                 "timeframe": "Custom",
                 "timePeriod": {
-                    "fromProperty": start_date.replace(microsecond=0).isoformat() + "Z",
+                    "from": start_date.replace(microsecond=0).isoformat() + "Z",
                     "to": now.replace(microsecond=0).isoformat() + "Z"
                 },
                 "dataset": {

@@ -49,10 +49,8 @@ def run_collection_pipeline(user_id=None, account_id=None):
         if settings.demo_mode:
             for acc in accounts:
                 if acc.provider == 'aws':
-                    from services import aws_collector
                     resources = aws_collector.collect_demo_data()
                 elif acc.provider == 'azure':
-                    from services import azure_collector
                     resources = azure_collector.collect_demo_data()
                 else:
                     continue

@@ -24,6 +24,7 @@ export default function TopBar({ toggleSidebar }) {
   const [cost, setCost] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
   const [showAddAccount, setShowAddAccount] = useState(false)
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null)
   
   // Dropdown states
   const [activeMenu, setActiveMenu] = useState(null) // 'settings', 'profile', 'notifications', 'account', or null
@@ -132,21 +133,45 @@ export default function TopBar({ toggleSidebar }) {
                     <span>{acc.name}</span>
                     <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{acc.region}</span>
                   </div>
-                  <div
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (window.confirm("Are you sure you want to remove this AWS account?")) {
-                        deleteAccount(acc.id);
-                        setActiveMenu(null);
-                      }
-                    }}
-                    style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', color: 'var(--text-secondary)', padding: '4px' }}
-                    title="Remove Account"
-                    onMouseEnter={(e) => e.currentTarget.style.color = '#ff4d4f'}
-                    onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-secondary)'}
-                  >
-                    <Trash2 size={14} />
-                  </div>
+                  {confirmDeleteId === acc.id ? (
+                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center', padding: '4px 8px' }}>
+                      <span 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteAccount(acc.id);
+                          setConfirmDeleteId(null);
+                          setActiveMenu(null);
+                        }}
+                        style={{ fontSize: 12, color: '#ff4d4f', cursor: 'pointer', fontWeight: 600 }}
+                        title="Confirm Delete"
+                      >
+                        Yes, Delete
+                      </span>
+                      <span 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setConfirmDeleteId(null);
+                        }}
+                        style={{ fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer' }}
+                        title="Cancel"
+                      >
+                        Cancel
+                      </span>
+                    </div>
+                  ) : (
+                    <div
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setConfirmDeleteId(acc.id);
+                      }}
+                      style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', color: 'var(--text-secondary)', padding: '4px' }}
+                      title="Remove Account"
+                      onMouseEnter={(e) => e.currentTarget.style.color = '#ff4d4f'}
+                      onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-secondary)'}
+                    >
+                      <Trash2 size={14} />
+                    </div>
+                  )}
                 </div>
               ))}
               <div className="dropdown-divider" />

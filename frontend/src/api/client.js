@@ -18,7 +18,7 @@ api.interceptors.request.use((config) => {
   }
   
   const accountId = localStorage.getItem('active_account_id')
-  if (accountId && !config.url.startsWith('/auth')) {
+  if (accountId && !config.url.startsWith('/auth') && !config.url.startsWith('/accounts')) {
     // Attach account_id to params
     config.params = { ...config.params, account_id: accountId }
   }
