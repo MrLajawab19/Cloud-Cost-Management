@@ -73,9 +73,9 @@ def create_account(account_in: AccountCreate, background_tasks: BackgroundTasks,
         if not settings.demo_mode:
             try:
                 from azure.identity import ClientSecretCredential
-                from azure.mgmt.resource import SubscriptionClient
+                from azure.mgmt.subscription import SubscriptionClient
                 credential = ClientSecretCredential(account_in.tenant_id, account_in.client_id, account_in.client_secret)
-                sub_client = SubscriptionClient(credential, subscription_id=account_in.subscription_id)
+                sub_client = SubscriptionClient(credential)
                 # Verify subscription exists
                 sub = sub_client.subscriptions.get(account_in.subscription_id)
             except Exception as e:

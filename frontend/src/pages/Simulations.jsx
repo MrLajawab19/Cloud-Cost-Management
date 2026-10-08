@@ -19,26 +19,26 @@ function SimBar({ baseline, simulated, uncertainty }) {
     <div style={{ margin: '14px 0' }}>
       {/* Baseline bar */}
       <div style={{ marginBottom: 6 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-3)', marginBottom: 3 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#64748b', marginBottom: 4, fontWeight: 500 }}>
           <span>Current forecast (baseline)</span>
-          <span style={{ fontWeight: 700, color: 'var(--text-2)' }}>{fmt(baseline)}/mo</span>
+          <span style={{ fontWeight: 700, color: '#1e293b' }}>{fmt(baseline)}/mo</span>
         </div>
-        <div style={{ height: 10, background: 'rgba(255,255,255,0.06)', borderRadius: 5, overflow: 'hidden' }}>
-          <div style={{ height: '100%', width: '100%', background: 'rgba(100,116,139,0.4)', borderRadius: 5 }} />
+        <div style={{ height: 10, background: '#f1f5f9', borderRadius: 5, overflow: 'hidden' }}>
+          <div style={{ height: '100%', width: '100%', background: '#cbd5e1', borderRadius: 5 }} />
         </div>
       </div>
 
       {/* Simulated bar — animated */}
       <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-3)', marginBottom: 3 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#64748b', marginBottom: 4, fontWeight: 500 }}>
           <span>After applying recommendation</span>
-          <span style={{ fontWeight: 700, color: '#34d399' }}>{fmt(simulated)}/mo</span>
+          <span style={{ fontWeight: 700, color: '#059669' }}>{fmt(simulated)}/mo</span>
         </div>
-        <div style={{ height: 10, background: 'rgba(255,255,255,0.06)', borderRadius: 5, overflow: 'hidden', position: 'relative' }}>
+        <div style={{ height: 10, background: '#f1f5f9', borderRadius: 5, overflow: 'hidden', position: 'relative' }}>
           <div style={{
             height: '100%',
             width: `${simPct}%`,
-            background: 'linear-gradient(90deg, #34d399, #059669)',
+            background: 'linear-gradient(90deg, #10b981, #059669)',
             borderRadius: 5,
             transition: 'width 0.8s cubic-bezier(0.25, 1, 0.5, 1)',
           }} />
@@ -46,11 +46,11 @@ function SimBar({ baseline, simulated, uncertainty }) {
           <div style={{
             position: 'absolute', top: 0, right: 0,
             height: '100%', width: `${uncPct}%`,
-            background: 'rgba(251,191,36,0.2)',
-            borderLeft: '1px dashed rgba(251,191,36,0.4)',
+            background: 'rgba(245,158,11,0.15)',
+            borderLeft: '1px dashed rgba(245,158,11,0.4)',
           }} title={`±${fmt(uncertainty)} forecast uncertainty`} />
         </div>
-        <div style={{ fontSize: 10, color: 'var(--text-4)', marginTop: 3, textAlign: 'right' }}>
+        <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4, textAlign: 'right' }}>
           ±{fmt(uncertainty)} forecast uncertainty band
         </div>
       </div>
@@ -65,16 +65,19 @@ function SimCard({ sim }) {
 
   return (
     <div className="card" style={{
-      border: `1px solid rgba(52,211,153,0.2)`,
-      background: 'linear-gradient(135deg, rgba(52,211,153,0.03), rgba(0,0,0,0))',
+      border: `1px solid rgba(16, 185, 129, 0.3)`,
+      background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.04) 0%, #ffffff 100%)',
+      boxShadow: '0 4px 12px rgba(16, 185, 129, 0.05)',
+      borderRadius: '16px',
+      overflow: 'hidden'
     }}>
       {/* Header */}
-      <div className="card-header" style={{ paddingBottom: 0 }}>
-        <div className="card-title" style={{ gap: 8 }}>
+      <div className="card-header" style={{ paddingBottom: 0, borderBottom: 'none' }}>
+        <div className="card-title" style={{ gap: 8, color: '#1e293b' }}>
           <span className={`chip chip-${sim.service_type.toLowerCase()}`}>{sim.service_type}</span>
           {sim.resource_name}
         </div>
-        <span style={{ fontSize: 11, color: 'var(--text-4)', marginLeft: 'auto' }}>{sim.region}</span>
+        <span style={{ fontSize: 12, color: '#64748b', marginLeft: 'auto', fontWeight: 500 }}>{sim.region}</span>
       </div>
 
       {/* Before/After bar */}
@@ -86,40 +89,41 @@ function SimCard({ sim }) {
 
       {/* Delta summary */}
       <div style={{
-        display: 'flex', gap: 20, padding: '12px 0',
-        borderTop: '1px solid rgba(255,255,255,0.05)',
-        borderBottom: '1px solid rgba(255,255,255,0.05)',
+        display: 'flex', gap: 24, padding: '16px 0', marginTop: 12,
+        borderTop: '1px solid rgba(0,0,0,0.06)',
+        borderBottom: '1px solid rgba(0,0,0,0.06)',
       }}>
         <div>
-          <div style={{ fontSize: 11, color: 'var(--text-3)' }}>Estimated Saving</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: '#34d399' }}>
-            {fmt(sim.delta_usd)}<span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-3)' }}>/mo</span>
+          <div style={{ fontSize: 12, color: '#64748b', fontWeight: 500 }}>Estimated Saving</div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: '#059669' }}>
+            {fmt(sim.delta_usd)}<span style={{ fontSize: 13, fontWeight: 500, color: '#64748b' }}>/mo</span>
           </div>
         </div>
         <div>
-          <div style={{ fontSize: 11, color: 'var(--text-3)' }}>Reduction</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: '#34d399' }}>
+          <div style={{ fontSize: 12, color: '#64748b', fontWeight: 500 }}>Reduction</div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: '#059669' }}>
             {(sim.delta_pct ?? 0).toFixed(1)}%
           </div>
         </div>
         {sim.upfront_cost_usd > 0 && (
           <div>
-            <div style={{ fontSize: 11, color: 'var(--text-3)' }}>Cash Impact (Mo 1)</div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: '#f87171', marginTop: 4 }}>
+            <div style={{ fontSize: 12, color: '#64748b', fontWeight: 500 }}>Cash Impact (Mo 1)</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#ef4444', marginTop: 4 }}>
               {fmt(sim.first_month_cash_impact_usd)}
             </div>
-            <div style={{ fontSize: 10, color: 'var(--text-4)' }}>Breakeven: {sim.payback_days}d</div>
+            <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 500 }}>Breakeven: {sim.payback_days}d</div>
           </div>
         )}
         {sim.monthly_trend_rate !== 0 && (
           <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
-            <div style={{ fontSize: 11, color: 'var(--text-3)' }}>{sim.service_type} trend</div>
+            <div style={{ fontSize: 12, color: '#64748b', fontWeight: 500 }}>{sim.service_type} trend</div>
             <div style={{
-              fontSize: 13, fontWeight: 700,
-              color: trendUp ? '#f87171' : '#34d399',
+              fontSize: 14, fontWeight: 700,
+              color: trendUp ? '#ef4444' : '#10b981',
               display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end',
+              marginTop: 4
             }}>
-              {trendUp ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
+              {trendUp ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
               {trendUp ? '+' : ''}{fmt(sim.monthly_trend_rate)}/mo trend
             </div>
           </div>
@@ -128,12 +132,12 @@ function SimCard({ sim }) {
 
       {/* Approximation notice */}
       <div style={{
-        marginTop: 10, fontSize: 11, color: '#fbbf24',
-        background: 'rgba(251,191,36,0.06)', borderRadius: 5,
-        padding: '6px 10px', display: 'flex', gap: 6, alignItems: 'flex-start',
+        marginTop: 16, fontSize: 12, color: '#b45309',
+        background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8,
+        padding: '10px 14px', display: 'flex', gap: 8, alignItems: 'flex-start',
       }}>
-        <AlertTriangle size={11} style={{ marginTop: 1, flexShrink: 0 }} />
-        <span>{sim.approx_note}</span>
+        <AlertTriangle size={14} style={{ marginTop: 1, flexShrink: 0, color: '#d97706' }} />
+        <span style={{ lineHeight: 1.4 }}>{sim.approx_note}</span>
       </div>
     </div>
   )
@@ -154,23 +158,27 @@ export function SimulationModal({ recId, onClose }) {
 
   return (
     <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
+      position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(8px)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      zIndex: 1000, padding: 20,
+      zIndex: 1000, padding: 20, animation: 'overlay-fade 0.2s ease-out'
     }} onClick={onClose}>
       <div style={{
-        background: 'var(--surface-1)', borderRadius: 12, padding: 24,
-        width: '100%', maxWidth: 520, boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
-        border: '1px solid var(--glass-border)',
+        background: '#ffffff', borderRadius: 20, padding: 32,
+        width: '100%', maxWidth: 580, boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
+        border: '1px solid rgba(0,0,0,0.05)', animation: 'modal-pop 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
       }} onClick={e => e.stopPropagation()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-1)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+          <div style={{ fontSize: 20, fontWeight: 800, color: '#1e293b', letterSpacing: '-0.02em' }}>
             What-If Simulation
           </div>
           <button onClick={onClose} style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            color: 'var(--text-3)', fontSize: 18, lineHeight: 1,
-          }}>×</button>
+            background: '#f1f5f9', border: 'none', cursor: 'pointer',
+            color: '#64748b', fontSize: 20, height: 32, width: 32, borderRadius: '50%',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            transition: 'all 0.2s'
+          }} onMouseEnter={e => {e.currentTarget.style.background = '#e2e8f0'; e.currentTarget.style.color = '#0f172a'}}
+             onMouseLeave={e => {e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#64748b'}}
+          >×</button>
         </div>
 
         {loading && (
@@ -183,7 +191,7 @@ export function SimulationModal({ recId, onClose }) {
         {sim && <SimCard sim={sim} />}
 
         {sim && !sim.upfront_cost_usd && (
-          <div style={{ fontSize: 11, color: 'var(--text-4)', marginTop: 12 }}>
+          <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 16, textAlign: 'center', fontStyle: 'italic' }}>
             {sim.synthetic_data_note}
           </div>
         )}

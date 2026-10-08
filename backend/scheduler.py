@@ -9,7 +9,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from config import get_settings
 from database import SessionLocal
-from services import aws_collector
+from services import aws_collector, azure_collector
 from services.cost_estimator import upsert_resources, record_daily_costs, seed_historical_data
 from services.cleanup_advisor import generate_recommendations
 from services.anomaly_detector import detect_anomalies
@@ -62,13 +62,25 @@ def run_collection_pipeline(user_id=None, account_id=None):
         else:
             for acc in accounts:
                 try:
-                    decrypted_secret = decrypt_secret(acc.encrypted_secret_key)
-                    resources = aws_collector.collect_all(
-                        access_key_id=acc.access_key_id,
-                        secret_access_key=decrypted_secret,
-                        region_name=acc.region,
-                        account_id=acc.id
-                    )
+                    if acc.provider == 'aws':
+                        decrypted_secret = decrypt_secret(acc.encrypted_secret_key)
+                        resources = aws_collector.collect_all(
+                            access_key_id=acc.access_key_id,
+                            secret_access_key=decrypted_secret,
+                            region_name=acc.region,
+                            account_id=acc.id
+                        )
+                    elif acc.provider == 'azure':
+                        resources = azure_collector.collect_all(
+                            tenant_id=acc.tenant_id,
+                            client_id=acc.client_id,
+                            client_secret=decrypt_secret(acc.encrypted_client_secret),
+                            subscription_id=acc.subscription_id,
+                            region_name=acc.region,
+                            account_id=acc.id
+                        )
+                    else:
+                        continue
                     all_resources.extend(resources)
                     synced_account_ids.append(acc.id)
                 except Exception as e:
