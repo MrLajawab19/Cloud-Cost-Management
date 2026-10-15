@@ -77,7 +77,8 @@ def seed_historical_data(
     inserted = 0
 
     from models.account import CloudAccount
-    from config import settings
+    from config import get_settings
+    settings = get_settings()
     
     acc = db.query(CloudAccount).filter(CloudAccount.id == account_id).first()
     
