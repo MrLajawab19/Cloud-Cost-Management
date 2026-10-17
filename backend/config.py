@@ -3,8 +3,11 @@ config.py — Application configuration loaded from environment variables.
 All secrets are read from .env (never hardcoded).
 """
 
+from pathlib import Path
 from pydantic_settings import BaseSettings
 from functools import lru_cache
+
+_ENV_PATH = Path(__file__).resolve().parent / ".env"
 
 
 class Settings(BaseSettings):
@@ -22,7 +25,7 @@ class Settings(BaseSettings):
     secret_key: str = "change_me"
 
     model_config = {
-        "env_file": ".env",
+        "env_file": _ENV_PATH,
         "case_sensitive": False,
         "extra": "ignore",  # Silently ignore VITE_*, POSTGRES_*, etc.
     }
