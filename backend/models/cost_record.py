@@ -38,6 +38,9 @@ class CostRecord(Base):
     # Origin tag — always set at insert time.
     # 'synthetic_seed'  : written by seed_historical_data() for ML bootstrap data
     # 'aws_collected'   : written by record_daily_costs() from a real AWS API call
+    # 'azure_collected' : written by record_daily_costs() from a real Azure API call
+    # 'aws_demo'        : written by record_daily_costs() for simulated AWS account
+    # 'azure_demo'      : written by record_daily_costs() for simulated Azure account
     # None              : legacy rows inserted before this column was added (pre-v2.1)
     source = Column(String(50), nullable=True, index=True)
 

@@ -10,7 +10,13 @@ from apscheduler.triggers.interval import IntervalTrigger
 from config import get_settings
 from database import SessionLocal
 from services import aws_collector, azure_collector
-from services.cost_estimator import upsert_resources, record_daily_costs, seed_historical_data
+from services.cost_estimator import (
+    upsert_resources,
+    record_daily_costs,
+    seed_historical_data,
+    is_aws_real,
+    is_azure_real,
+)
 from services.cleanup_advisor import generate_recommendations
 from services.anomaly_detector import detect_anomalies
 
@@ -97,9 +103,7 @@ def run_collection_pipeline(user_id=None, account_id=None):
         target_accounts_map = {acc.id: acc for acc in accounts}
         for acc_id in (synced_account_ids if synced_account_ids else [acc.id for acc in accounts]):
             acc = target_accounts_map.get(acc_id)
-            is_aws_real = acc and acc.provider == 'aws' and acc.encrypted_secret_key and len(acc.encrypted_secret_key.strip()) > 0
-            is_azure_real = acc and acc.provider == 'azure' and acc.encrypted_client_secret and len(acc.encrypted_client_secret.strip()) > 0
-            has_real_creds = is_aws_real or is_azure_real
+            has_real_creds = is_aws_real(acc) or is_azure_real(acc)
             if not settings.demo_mode:
                 logger.debug(
                     "seed_historical_data: skipping account %s — demo_mode is False.", acc_id[:8]

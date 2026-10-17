@@ -20,8 +20,29 @@ from sqlalchemy import func
 
 from models.resource import Resource
 from models.cost_record import CostRecord
+from models.account import CloudAccount
 
 logger = logging.getLogger(__name__)
+
+
+def is_aws_real(acc: Optional[Any]) -> bool:
+    """Return True if account has valid non-empty AWS credentials."""
+    return bool(
+        acc
+        and getattr(acc, "provider", None) == "aws"
+        and getattr(acc, "encrypted_secret_key", None)
+        and len(acc.encrypted_secret_key.strip()) > 0
+    )
+
+
+def is_azure_real(acc: Optional[Any]) -> bool:
+    """Return True if account has valid non-empty Azure credentials."""
+    return bool(
+        acc
+        and getattr(acc, "provider", None) == "azure"
+        and getattr(acc, "encrypted_client_secret", None)
+        and len(acc.encrypted_client_secret.strip()) > 0
+    )
 
 # ── Demo / seed constants ────────────────────────────────────────
 # Approximate daily cost profiles per service (USD/day).
@@ -76,15 +97,11 @@ def seed_historical_data(
     rng     = random.Random(account_id)  # deterministic per-account seed
     inserted = 0
 
-    from models.account import CloudAccount
     from config import get_settings
     settings = get_settings()
-    
+
     acc = db.query(CloudAccount).filter(CloudAccount.id == account_id).first()
-    
-    is_aws_real = acc and acc.provider == 'aws' and acc.encrypted_secret_key and len(acc.encrypted_secret_key.strip()) > 0
-    is_azure_real = acc and acc.provider == 'azure' and acc.encrypted_client_secret and len(acc.encrypted_client_secret.strip()) > 0
-    has_real_creds = is_aws_real or is_azure_real
+    has_real_creds = is_aws_real(acc) or is_azure_real(acc)
     
     if not settings.demo_mode or has_real_creds:
         logger.warning(
@@ -181,15 +198,20 @@ def record_daily_costs(db: Session, resources: List[Dict[str, Any]]) -> int:
     """
     Append a CostRecord for today for each resource.
     Skips if a record for today already exists for that resource.
+    Dynamically tags `source`:
+      - '{provider}_collected' if account has real credentials
+      - '{provider}_demo' if account has simulated/demo credentials
     Returns count of new records inserted.
     """
     today = date.today()
     count = 0
+    account_cache: Dict[str, Optional[CloudAccount]] = {}
 
     for r in resources:
         resource_id  = r["resource_id"]
         service_type = r["service_type"]
         region       = r.get("region", "unknown")
+        account_id   = r.get("account_id")
         daily_cost   = r.get("estimated_monthly_cost", 0.0) / 30  # monthly → daily
 
         exists = db.query(CostRecord).filter(
@@ -198,15 +220,31 @@ def record_daily_costs(db: Session, resources: List[Dict[str, Any]]) -> int:
         ).first()
 
         if not exists:
+            if account_id not in account_cache:
+                account_cache[account_id] = (
+                    db.query(CloudAccount).filter(CloudAccount.id == account_id).first()
+                    if account_id else None
+                )
+            acc = account_cache[account_id]
+
+            if acc:
+                provider = acc.provider or ("azure" if service_type.startswith("Azure") else "aws")
+                is_real = is_azure_real(acc) if provider == "azure" else is_aws_real(acc)
+            else:
+                provider = "azure" if service_type.startswith("Azure") else "aws"
+                is_real = False
+
+            source_tag = f"{provider}_collected" if is_real else f"{provider}_demo"
+
             record = CostRecord(
-                account_id       = r.get("account_id"),
+                account_id       = account_id,
                 resource_id      = resource_id,
                 service_type     = service_type,
                 region           = region,
                 record_date      = today,
                 daily_cost_usd   = round(daily_cost, 6),
                 monthly_estimate = r.get("estimated_monthly_cost", 0.0),
-                source           = "aws_collected",   # always tag — real AWS API data
+                source           = source_tag,
             )
             db.add(record)
             count += 1
