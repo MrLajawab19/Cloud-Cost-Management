@@ -149,8 +149,8 @@ export default function Resources() {
                     <td style={{ color: 'var(--text-3)' }}>
                       {r.storage_size_gb != null ? r.storage_size_gb.toFixed(2) : '—'}
                     </td>
-                    <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--text-1)' }}>
-                      ${(r.estimated_monthly_cost || 0).toFixed(2)}
+                    <td style={{ textAlign: 'right', fontWeight: 700, color: r.estimated_monthly_cost != null ? 'var(--text-1)' : 'var(--text-3)' }}>
+                      {r.estimated_monthly_cost != null ? `$${r.estimated_monthly_cost.toFixed(2)}` : 'Cost unavailable'}
                     </td>
                   </tr>
                 ))}

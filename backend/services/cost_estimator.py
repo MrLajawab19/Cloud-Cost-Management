@@ -166,6 +166,8 @@ def upsert_resources(db: Session, resources: List[Dict[str, Any]], synced_accoun
             # Update all fields
             for key, value in r.items():
                 if hasattr(existing, key) and key not in ("id", "created_at"):
+                    if key == "estimated_monthly_cost" and value is None and getattr(existing, key) is not None:
+                        continue
                     setattr(existing, key, value)
             existing.last_seen = datetime.utcnow()
         else:
@@ -201,6 +203,7 @@ def record_daily_costs(db: Session, resources: List[Dict[str, Any]]) -> int:
     Dynamically tags `source`:
       - '{provider}_collected' if account has real credentials
       - '{provider}_demo' if account has simulated/demo credentials
+    Skips resources where daily cost is None (daily_cost_usd is NOT NULL).
     Returns count of new records inserted.
     """
     today = date.today()
@@ -212,7 +215,15 @@ def record_daily_costs(db: Session, resources: List[Dict[str, Any]]) -> int:
         service_type = r["service_type"]
         region       = r.get("region", "unknown")
         account_id   = r.get("account_id")
-        daily_cost   = r.get("estimated_monthly_cost", 0.0) / 30  # monthly → daily
+
+        daily_cost_val = r.get("daily_cost_usd")
+        if daily_cost_val is None:
+            monthly = r.get("estimated_monthly_cost")
+            daily_cost_val = (monthly / 30.0) if monthly is not None else None
+
+        # Skip recording if daily cost is unknown/None (daily_cost_usd is NOT NULL)
+        if daily_cost_val is None:
+            continue
 
         exists = db.query(CostRecord).filter(
             CostRecord.resource_id == resource_id,
@@ -242,8 +253,8 @@ def record_daily_costs(db: Session, resources: List[Dict[str, Any]]) -> int:
                 service_type     = service_type,
                 region           = region,
                 record_date      = today,
-                daily_cost_usd   = round(daily_cost, 6),
-                monthly_estimate = r.get("estimated_monthly_cost", 0.0),
+                daily_cost_usd   = round(daily_cost_val, 6),
+                monthly_estimate = r.get("estimated_monthly_cost"),
                 source           = source_tag,
             )
             db.add(record)

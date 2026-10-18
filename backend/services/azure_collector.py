@@ -62,10 +62,126 @@ SCHEDULER INTEGRATION (prepared, not yet active):
 """
 
 import logging
-from typing import List, Dict, Any
+import time
+from typing import List, Dict, Any, Optional
 from datetime import date
 
 logger = logging.getLogger(__name__)
+
+# Module-level cache for Azure Cost Management data per subscription_id
+# Structure: {subscription_id: {"data": usage_costs_dict, "timestamp": unix_time}}
+_COST_CACHE: Dict[str, Dict[str, Any]] = {}
+
+
+def query_cost_management(cost_client, subscription_id: str) -> Optional[Dict[str, float]]:
+    """
+    Query Azure Cost Management for the past 30 days per resource with retries and caching.
+    - Up to 3 attempts.
+    - On 429: wait is the largest integer in response headers ending with 'retry-after' capped at 60s,
+      otherwise 10 * 2^attempt s.
+    - On final failure return None (distinct from a successful empty result {}).
+    - Caches successful results with a 3h TTL.
+    - On failure, reuses a cache entry up to 24h old, otherwise returns None.
+    """
+    global _COST_CACHE
+    now_ts = time.time()
+
+    # 1. Check fresh cache (3h TTL)
+    if subscription_id in _COST_CACHE:
+        entry = _COST_CACHE[subscription_id]
+        if now_ts - entry["timestamp"] <= 3 * 3600:
+            logger.info(
+                f"Using cached Azure Cost Management data for subscription {subscription_id} "
+                f"(age: {int(now_ts - entry['timestamp'])}s)"
+            )
+            return entry["data"]
+
+    from datetime import datetime, timedelta
+
+    max_attempts = 3
+    for attempt in range(max_attempts):
+        try:
+            scope = f"/subscriptions/{subscription_id}"
+            now = datetime.utcnow()
+            start_date = now - timedelta(days=30)
+
+            query_parameters = {
+                "type": "ActualCost",
+                "timeframe": "Custom",
+                "timePeriod": {
+                    "from": start_date.replace(microsecond=0).isoformat() + "Z",
+                    "to": now.replace(microsecond=0).isoformat() + "Z",
+                },
+                "dataset": {
+                    "granularity": "None",
+                    "aggregation": {
+                        "totalCost": {"name": "PreTaxCost", "function": "Sum"}
+                    },
+                    "grouping": [{"type": "Dimension", "name": "ResourceId"}],
+                },
+            }
+            cost_result = cost_client.query.usage(scope, query_parameters)
+            usage_costs: Dict[str, float] = {}
+            if cost_result and cost_result.rows:
+                cost_idx = 0
+                res_idx = 1
+                for i, col in enumerate(cost_result.columns):
+                    if col.name == "PreTaxCost":
+                        cost_idx = i
+                    elif col.name == "ResourceId":
+                        res_idx = i
+
+                for row in cost_result.rows:
+                    if len(row) > max(cost_idx, res_idx) and row[res_idx]:
+                        cost_val = float(row[cost_idx] or 0.0)
+                        res_id = str(row[res_idx]).lower()
+                        usage_costs[res_id] = usage_costs.get(res_id, 0.0) + cost_val
+
+            # Cache successful result (3h TTL)
+            _COST_CACHE[subscription_id] = {"data": usage_costs, "timestamp": time.time()}
+            return usage_costs
+
+        except Exception as e:
+            status_code = getattr(e, "status_code", None)
+            if not status_code and hasattr(e, "response"):
+                status_code = getattr(e.response, "status_code", None)
+            is_429 = (status_code == 429) or ("429" in str(e))
+            if is_429 and attempt < max_attempts - 1:
+                headers = getattr(getattr(e, "response", None), "headers", {}) or {}
+                retry_vals = []
+                for k, v in headers.items():
+                    if k.lower().endswith("retry-after"):
+                        try:
+                            retry_vals.append(int(v))
+                        except (ValueError, TypeError):
+                            pass
+                if retry_vals:
+                    wait_sec = min(60, max(retry_vals))
+                else:
+                    wait_sec = min(60, 10 * (2 ** attempt))
+                logger.warning(
+                    f"Cost Management query returned 429 for subscription {subscription_id}. "
+                    f"Retrying in {wait_sec}s (attempt {attempt + 1}/{max_attempts})"
+                )
+                time.sleep(wait_sec)
+            else:
+                logger.warning(
+                    f"Could not fetch Azure Cost Management data for subscription {subscription_id}: {e}"
+                )
+                if attempt == max_attempts - 1:
+                    break
+
+    # 2. On failure, check stale cache fallback (up to 24h old)
+    if subscription_id in _COST_CACHE:
+        entry = _COST_CACHE[subscription_id]
+        if now_ts - entry["timestamp"] <= 24 * 3600:
+            logger.info(
+                f"Reusing stale cached Cost Management data for subscription {subscription_id} "
+                f"(age: {int(now_ts - entry['timestamp'])}s)"
+            )
+            return entry["data"]
+
+    return None
 
 
 def collect_all(
@@ -84,54 +200,14 @@ def collect_all(
         from azure.mgmt.costmanagement import CostManagementClient
         from azure.monitor.query import MetricsQueryClient
         from datetime import datetime, timedelta, timezone
-        
+
         credential = ClientSecretCredential(tenant_id, client_id, client_secret)
         compute_client = ComputeManagementClient(credential, subscription_id)
         cost_client = CostManagementClient(credential)
         metrics_client = MetricsQueryClient(credential)
-        
-        # 1. Fetch Cost Management Data (Last 30 Days)
-        usage_costs = {}
-        try:
-            scope = f"/subscriptions/{subscription_id}"
-            now = datetime.utcnow()
-            start_date = now - timedelta(days=30)
-            
-            query_parameters = {
-                "type": "ActualCost",
-                "timeframe": "Custom",
-                "timePeriod": {
-                    "from": start_date.replace(microsecond=0).isoformat() + "Z",
-                    "to": now.replace(microsecond=0).isoformat() + "Z"
-                },
-                "dataset": {
-                    "granularity": "None",
-                    "aggregation": {
-                        "totalCost": {"name": "PreTaxCost", "function": "Sum"}
-                    },
-                    "grouping": [
-                        {"type": "Dimension", "name": "ResourceId"}
-                    ]
-                }
-            }
-            cost_result = cost_client.query.usage(scope, query_parameters)
-            if cost_result and cost_result.rows:
-                # Rows generally follow: [Cost, ResourceId, Currency] or similar.
-                # Find the index of Cost and ResourceId based on columns metadata if needed,
-                # but typically Azure returns Cost at index 0, and grouped dimension at index 1.
-                cost_idx = 0
-                res_idx = 1
-                for i, col in enumerate(cost_result.columns):
-                    if col.name == "PreTaxCost": cost_idx = i
-                    if col.name == "ResourceId": res_idx = i
-                
-                for row in cost_result.rows:
-                    if len(row) > max(cost_idx, res_idx):
-                        cost_val = float(row[cost_idx] or 0.0)
-                        res_id = str(row[res_idx]).lower()
-                        usage_costs[res_id] = usage_costs.get(res_id, 0.0) + cost_val
-        except Exception as e:
-            logger.warning(f"Could not fetch Azure Cost Management data for subscription {subscription_id}: {e}")
+
+        # 1. Fetch Cost Management Data (Last 30 Days) via cached/retried helper
+        usage_costs = query_cost_management(cost_client, subscription_id)
             
         # Helper for CPU Metrics
         def get_cpu(vm_id: str) -> float:
@@ -202,13 +278,23 @@ def collect_all(
                         runtime_hours = 0.0
 
                 # Fetch Real Metrics & Costs
-                monthly_cost = usage_costs.get(vm_id.lower(), 0.0)
-                daily_cost = monthly_cost / 30.0
-                
+                # Per VM: cost found -> value; query OK but VM absent from rows -> None; query failed -> None
+                if usage_costs is not None:
+                    if vm_id.lower() in usage_costs:
+                        monthly_cost = usage_costs[vm_id.lower()]
+                        daily_cost = round(monthly_cost / 30.0, 4)
+                        est_monthly = round(monthly_cost, 2)
+                    else:
+                        daily_cost = None
+                        est_monthly = None
+                else:
+                    daily_cost = None
+                    est_monthly = None
+
                 cpu_avg = None
                 if status == "running":
                     cpu_avg = get_cpu(vm_id)
-                
+
                 resources.append({
                     "account_id":          account_id,
                     "resource_id":         vm_id,
@@ -222,8 +308,8 @@ def collect_all(
                     "launch_time":         launch_time,
                     "storage_size_gb":     storage_size,
                     "request_count":       None,
-                    "daily_cost_usd":      round(daily_cost, 4),
-                    "estimated_monthly_cost": round(monthly_cost, 2),
+                    "daily_cost_usd":      daily_cost,
+                    "estimated_monthly_cost": est_monthly,
                     "record_date":         str(datetime.utcnow().date()),
                 })
             except Exception as e:

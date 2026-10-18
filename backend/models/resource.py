@@ -56,7 +56,7 @@ class Resource(Base):
     runtime_hours          = Column(Float, nullable=True)   # EC2/RDS uptime hours
 
     # Cost
-    estimated_monthly_cost = Column(Float, default=0.0)     # USD
+    estimated_monthly_cost = Column(Float, nullable=True)     # USD (None when unknown)
 
     # Flags
     is_idle     = Column(Boolean, default=False)

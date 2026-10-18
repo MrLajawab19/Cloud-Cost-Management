@@ -122,6 +122,8 @@ def generate_recommendations(db: Session) -> int:
 
         # -- AzureVM Rules ----------------------------------------
         elif r.service_type == "AzureVM":
+            if r.estimated_monthly_cost is None:
+                continue
             if r.status == "running":
                 # Real CPU metrics from Azure Monitor (or None if missing/unavailable)
                 # Skip when cpu is None or runtime_hours is None or runtime_hours < 168
