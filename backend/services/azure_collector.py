@@ -83,7 +83,7 @@ def collect_all(
         from azure.mgmt.compute import ComputeManagementClient
         from azure.mgmt.costmanagement import CostManagementClient
         from azure.monitor.query import MetricsQueryClient
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
         
         credential = ClientSecretCredential(tenant_id, client_id, client_secret)
         compute_client = ComputeManagementClient(credential, subscription_id)
@@ -190,6 +190,17 @@ def collect_all(
                 if vm.storage_profile and vm.storage_profile.os_disk and vm.storage_profile.os_disk.disk_size_gb:
                     storage_size = float(vm.storage_profile.os_disk.disk_size_gb)
                 
+                # Launch time & runtime hours (same semantics as EC2)
+                launch_time = getattr(vm, "time_created", None)
+                runtime_hours = None
+                if launch_time:
+                    if status == "running":
+                        now_tz = datetime.now(timezone.utc) if launch_time.tzinfo else datetime.utcnow()
+                        delta = now_tz - launch_time
+                        runtime_hours = max(0.0, round(delta.total_seconds() / 3600, 2))
+                    else:
+                        runtime_hours = 0.0
+
                 # Fetch Real Metrics & Costs
                 monthly_cost = usage_costs.get(vm_id.lower(), 0.0)
                 daily_cost = monthly_cost / 30.0
@@ -207,6 +218,8 @@ def collect_all(
                     "region":              region,
                     "status":              status,
                     "cpu_utilization_avg": cpu_avg,
+                    "runtime_hours":       runtime_hours,
+                    "launch_time":         launch_time,
                     "storage_size_gb":     storage_size,
                     "request_count":       None,
                     "daily_cost_usd":      round(daily_cost, 4),
@@ -243,7 +256,8 @@ def collect_demo_data() -> List[Dict[str, Any]]:
             "resource_type":       "Standard_D2s_v3",
             "region":              "eastus",
             "status":              "running",
-            "cpu_utilization_avg": None,   # Azure Monitor deferred
+            "cpu_utilization_avg": 0.4,
+            "runtime_hours":       1440.0,
             "storage_size_gb":     128.0,
             "request_count":       None,
             "daily_cost_usd":      4.20,
@@ -259,6 +273,7 @@ def collect_demo_data() -> List[Dict[str, Any]]:
             "region":              "westeurope",
             "status":              "stopped",   # deallocated -> stopped per field-mapping contract
             "cpu_utilization_avg": None,
+            "runtime_hours":       0.0,
             "storage_size_gb":     64.0,
             "request_count":       None,
             "daily_cost_usd":      0.05,        # storage-only cost when deallocated
@@ -273,7 +288,8 @@ def collect_demo_data() -> List[Dict[str, Any]]:
             "resource_type":       "Standard_F8s_v2",
             "region":              "eastus",
             "status":              "running",
-            "cpu_utilization_avg": None,
+            "cpu_utilization_avg": 0.8,
+            "runtime_hours":       960.0,
             "storage_size_gb":     256.0,
             "request_count":       None,
             "daily_cost_usd":      9.80,
