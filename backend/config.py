@@ -39,3 +39,6 @@ def get_settings() -> Settings:
 
 settings = get_settings()
 
+# Currency fixed conversion rates relative to USD (fixed assumption)
+CURRENCY_FIXED_RATES = {"USD": 1.0, "INR": 0.0115}
+

@@ -43,6 +43,8 @@ class ResourceOut(BaseModel):
     request_count: Optional[float]
     runtime_hours: Optional[float]
     estimated_monthly_cost: Optional[float] = None
+    original_cost_amount: Optional[float] = None
+    cost_currency: Optional[str] = None
     is_idle: bool
     is_flagged: bool
     last_seen: Optional[datetime]

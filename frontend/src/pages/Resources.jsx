@@ -150,7 +150,16 @@ export default function Resources() {
                       {r.storage_size_gb != null ? r.storage_size_gb.toFixed(2) : '—'}
                     </td>
                     <td style={{ textAlign: 'right', fontWeight: 700, color: r.estimated_monthly_cost != null ? 'var(--text-1)' : 'var(--text-3)' }}>
-                      {r.estimated_monthly_cost != null ? `$${r.estimated_monthly_cost.toFixed(2)}` : 'Cost unavailable'}
+                      {r.estimated_monthly_cost != null ? (
+                        <div>
+                          <div>${r.estimated_monthly_cost.toFixed(2)}</div>
+                          {r.cost_currency && r.cost_currency !== 'USD' && (
+                            <div style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-3)' }}>
+                              converted from {r.cost_currency} at a fixed rate
+                            </div>
+                          )}
+                        </div>
+                      ) : 'Cost unavailable'}
                     </td>
                   </tr>
                 ))}

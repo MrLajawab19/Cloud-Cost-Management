@@ -57,6 +57,8 @@ class Resource(Base):
 
     # Cost
     estimated_monthly_cost = Column(Float, nullable=True)     # USD (None when unknown)
+    original_cost_amount   = Column(Float, nullable=True)     # Original 30-day amount before conversion
+    cost_currency          = Column(String(10), nullable=True) # Currency code (e.g. INR, USD)
 
     # Flags
     is_idle     = Column(Boolean, default=False)

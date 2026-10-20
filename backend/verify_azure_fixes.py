@@ -294,6 +294,58 @@ def test_azure_cost_handling():
     print("\nALL ITEM A TESTS PASSED!")
 
 
+def test_currency_conversion():
+    print("\n=== PART 3: Currency Conversion (Item I) ===")
+    from unittest.mock import MagicMock
+    from services.azure_collector import query_cost_management, _COST_CACHE
+
+    _COST_CACHE.clear()
+
+    class FakeColumn:
+        def __init__(self, name):
+            self.name = name
+
+    fake_result = MagicMock()
+    fake_result.columns = [FakeColumn("PreTaxCost"), FakeColumn("ResourceId"), FakeColumn("Currency")]
+    fake_result.rows = [
+        [352.98, "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm-1", "INR"],
+        [10.0, "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm-2", "USD"],
+        [5.0, "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm-3", "XYZ"],
+    ]
+
+    fake_cost_client = MagicMock()
+    fake_cost_client.query.usage.return_value = fake_result
+
+    usage = query_cost_management(fake_cost_client, "test-sub-currency")
+
+    vm1_key = "/subscriptions/sub/resourcegroups/rg/providers/microsoft.compute/virtualmachines/vm-1"
+    vm2_key = "/subscriptions/sub/resourcegroups/rg/providers/microsoft.compute/virtualmachines/vm-2"
+    vm3_key = "/subscriptions/sub/resourcegroups/rg/providers/microsoft.compute/virtualmachines/vm-3"
+
+    vm1 = usage.get(vm1_key)
+    vm2 = usage.get(vm2_key)
+    vm3 = usage.get(vm3_key)
+
+    print(f"vm-1: cost_usd={vm1['cost_usd']} (expected 4.06 USD), original_amount={vm1['original_amount']} (expected 352.98), currency={vm1['currency']} (expected INR)")
+    print(f"vm-2: cost_usd={vm2['cost_usd']} (expected 10.0 USD), original_amount={vm2['original_amount']} (expected 10.0), currency={vm2['currency']} (expected USD)")
+    print(f"vm-3: cost_usd={vm3['cost_usd']} (expected None), original_amount={vm3['original_amount']} (expected 5.0), currency={vm3['currency']} (expected XYZ)")
+
+    assert vm1["cost_usd"] == 4.06, f"Expected 4.06, got {vm1['cost_usd']}"
+    assert vm1["original_amount"] == 352.98, f"Expected 352.98, got {vm1['original_amount']}"
+    assert vm1["currency"] == "INR", f"Expected INR, got {vm1['currency']}"
+
+    assert vm2["cost_usd"] == 10.0, f"Expected 10.0, got {vm2['cost_usd']}"
+    assert vm2["original_amount"] == 10.0, f"Expected 10.0, got {vm2['original_amount']}"
+    assert vm2["currency"] == "USD", f"Expected USD, got {vm2['currency']}"
+
+    assert vm3["cost_usd"] is None, f"Expected None, got {vm3['cost_usd']}"
+    assert vm3["currency"] == "XYZ", f"Expected XYZ, got {vm3['currency']}"
+
+    print("Currency conversion test PASSED successfully.")
+
+
 if __name__ == "__main__":
     test_azure_fixes()
     test_azure_cost_handling()
+    test_currency_conversion()
+

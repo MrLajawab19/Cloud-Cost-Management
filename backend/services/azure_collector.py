@@ -67,6 +67,7 @@ from typing import List, Dict, Any, Optional
 from datetime import date
 
 from services.exceptions import CollectionFailed
+from config import CURRENCY_FIXED_RATES
 
 logger = logging.getLogger(__name__)
 
@@ -123,21 +124,56 @@ def query_cost_management(cost_client, subscription_id: str) -> Optional[Dict[st
                 },
             }
             cost_result = cost_client.query.usage(scope, query_parameters)
-            usage_costs: Dict[str, float] = {}
+            usage_costs: Dict[str, Dict[str, Any]] = {}
             if cost_result and cost_result.rows:
                 cost_idx = 0
                 res_idx = 1
+                curr_idx = None
                 for i, col in enumerate(cost_result.columns):
-                    if col.name == "PreTaxCost":
+                    col_name = getattr(col, "name", str(col))
+                    if col_name == "PreTaxCost":
                         cost_idx = i
-                    elif col.name == "ResourceId":
+                    elif col_name == "ResourceId":
                         res_idx = i
+                    elif col_name == "Currency":
+                        curr_idx = i
 
                 for row in cost_result.rows:
                     if len(row) > max(cost_idx, res_idx) and row[res_idx]:
-                        cost_val = float(row[cost_idx] or 0.0)
+                        raw_cost = float(row[cost_idx]) if row[cost_idx] is not None else 0.0
                         res_id = str(row[res_idx]).lower()
-                        usage_costs[res_id] = usage_costs.get(res_id, 0.0) + cost_val
+                        currency = (
+                            str(row[curr_idx]).strip().upper()
+                            if (curr_idx is not None and len(row) > curr_idx and row[curr_idx] is not None)
+                            else "USD"
+                        )
+
+                        rate = CURRENCY_FIXED_RATES.get(currency)
+                        if rate is None:
+                            logger.warning(
+                                f"Unknown currency '{currency}' for Azure resource '{res_id}'; cost set to None"
+                            )
+                            cost_usd = None
+                        else:
+                            cost_usd = round(raw_cost * rate, 2)
+
+                        if res_id not in usage_costs:
+                            usage_costs[res_id] = {
+                                "cost_usd": cost_usd,
+                                "original_amount": raw_cost,
+                                "currency": currency,
+                            }
+                        else:
+                            existing = usage_costs[res_id]
+                            if cost_usd is None or existing["cost_usd"] is None:
+                                existing["cost_usd"] = None
+                            else:
+                                existing["cost_usd"] = round(existing["cost_usd"] + cost_usd, 2)
+                            if existing["currency"] == currency:
+                                existing["original_amount"] = round(existing["original_amount"] + raw_cost, 2)
+                            else:
+                                existing["original_amount"] = None
+                                existing["currency"] = "MIXED"
 
             # Cache successful result (3h TTL)
             _COST_CACHE[subscription_id] = {"data": usage_costs, "timestamp": time.time()}
@@ -287,17 +323,20 @@ def collect_all(
 
                 # Fetch Real Metrics & Costs
                 # Per VM: cost found -> value; query OK but VM absent from rows -> None; query failed -> None
+                daily_cost = None
+                est_monthly = None
+                orig_amount = None
+                orig_currency = None
+
                 if usage_costs is not None:
-                    if vm_id.lower() in usage_costs:
-                        monthly_cost = usage_costs[vm_id.lower()]
-                        daily_cost = round(monthly_cost / 30.0, 4)
-                        est_monthly = round(monthly_cost, 2)
-                    else:
-                        daily_cost = None
-                        est_monthly = None
-                else:
-                    daily_cost = None
-                    est_monthly = None
+                    cost_info = usage_costs.get(vm_id.lower())
+                    if cost_info is not None:
+                        monthly_cost = cost_info.get("cost_usd")
+                        if monthly_cost is not None:
+                            daily_cost = round(monthly_cost / 30.0, 4)
+                            est_monthly = round(monthly_cost, 2)
+                        orig_amount = cost_info.get("original_amount")
+                        orig_currency = cost_info.get("currency")
 
                 cpu_avg = None
                 if status == "running":
@@ -318,6 +357,8 @@ def collect_all(
                     "request_count":       None,
                     "daily_cost_usd":      daily_cost,
                     "estimated_monthly_cost": est_monthly,
+                    "original_cost_amount": orig_amount,
+                    "cost_currency":       orig_currency,
                     "record_date":         str(datetime.utcnow().date()),
                 })
             except Exception as e:
