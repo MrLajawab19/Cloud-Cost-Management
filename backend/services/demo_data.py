@@ -302,18 +302,24 @@ def seed_demo_history(db: Session, account: CloudAccount, days: int = 45):
             "S3":     {"base": 0.7775, "trend": 0.0005},
             "Lambda": {"base": 0.05, "trend": 0.0},
         }
+        rng = random.Random(9999)
+        sigma = 0.02
+        weekly_amp = 0.02
+        spike_mult = 1.5
 
         for day_offset in range(days, 0, -1):
             rec_date = today - timedelta(days=day_offset)
             t = days - day_offset
             for svc, p in profiles.items():
                 trend = p["trend"] * t
-                noise = 0.08 * math.sin(t * 1.5) if svc == "EC2" else 0.0
-                daily_cost = max(0.001, p["base"] + trend + noise)
+                weekly = weekly_amp * math.sin(2 * math.pi * t / 7.0)
+                raw_noise = rng.gauss(0, sigma)
+                clipped_noise = max(-2 * sigma, min(2 * sigma, raw_noise))
+                daily_cost = p["base"] * (1.0 + weekly + clipped_noise) + trend
 
-                # ONE deliberate EC2 cost spike (+80% for 2 days) on days 10 and 9 before today
-                if svc == "EC2" and day_offset in [10, 9]:
-                    daily_cost *= 1.80
+                # ONE deliberate single-day EC2 cost spike 12 days before today
+                if svc == "EC2" and day_offset == 12:
+                    daily_cost *= spike_mult
 
                 source = "synthetic_seed" if day_offset > 1 else "aws_demo"
                 cr = CostRecord(
@@ -322,7 +328,7 @@ def seed_demo_history(db: Session, account: CloudAccount, days: int = 45):
                     service_type=svc,
                     region=account.region or "us-east-1",
                     record_date=rec_date,
-                    daily_cost_usd=round(daily_cost, 6),
+                    daily_cost_usd=round(max(0.001, daily_cost), 6),
                     monthly_estimate=round(daily_cost * 30, 4),
                     source=source,
                 )
@@ -330,16 +336,23 @@ def seed_demo_history(db: Session, account: CloudAccount, days: int = 45):
 
     elif account.provider == "azure":
         profile = {"base": 13.87, "trend": 0.004}
+        rng = random.Random(101)
+        sigma = 0.02
+        weekly_amp = 0.02
+        spike_mult = 1.3
+
         for day_offset in range(days, 0, -1):
             rec_date = today - timedelta(days=day_offset)
             t = days - day_offset
             trend = profile["trend"] * t
-            noise = 0.35 * math.sin(t * 1.3)
-            daily_cost = max(0.001, profile["base"] + trend + noise)
+            weekly = weekly_amp * math.sin(2 * math.pi * t / 7.0)
+            raw_noise = rng.gauss(0, sigma)
+            clipped_noise = max(-2 * sigma, min(2 * sigma, raw_noise))
+            daily_cost = profile["base"] * (1.0 + weekly + clipped_noise) + trend
 
-            # ONE small AzureVM cost spike about 7 days before today (relative to today)
+            # ONE small single-day AzureVM cost spike 7 days before today
             if day_offset == 7:
-                daily_cost *= 1.55
+                daily_cost *= spike_mult
 
             source = "synthetic_seed" if day_offset > 1 else "azure_demo"
             cr = CostRecord(
@@ -348,7 +361,7 @@ def seed_demo_history(db: Session, account: CloudAccount, days: int = 45):
                 service_type="AzureVM",
                 region=account.region or "eastus",
                 record_date=rec_date,
-                daily_cost_usd=round(daily_cost, 6),
+                daily_cost_usd=round(max(0.001, daily_cost), 6),
                 monthly_estimate=round(daily_cost * 30, 4),
                 source=source,
             )
@@ -360,6 +373,7 @@ def seed_demo_history(db: Session, account: CloudAccount, days: int = 45):
 def ensure_demo_accounts(db: Session, user_id: str):
     """
     Ensure Demo AWS and Demo Azure accounts exist for user_id with uuid.uuid5 ids.
+    Grace period is set to 1 hour so pending escalations mature shortly after initial run.
     """
     u_uuid = uuid.UUID(str(user_id))
     aws_id = str(uuid.uuid5(u_uuid, "demo-aws"))
@@ -376,14 +390,14 @@ def ensure_demo_accounts(db: Session, user_id: str):
             access_key_id="",
             encrypted_secret_key="",
             auto_remediate_enabled=True,
-            grace_period_hours=48,
+            grace_period_hours=1,
             budget_threshold_usd=500.0,
         )
         db.add(acc_aws)
     else:
         acc_aws.name = "Demo AWS"
         acc_aws.auto_remediate_enabled = True
-        acc_aws.grace_period_hours = 48
+        acc_aws.grace_period_hours = 1
         acc_aws.budget_threshold_usd = 500.0
 
     acc_azure = db.query(CloudAccount).filter(CloudAccount.id == azure_id).first()
@@ -399,14 +413,14 @@ def ensure_demo_accounts(db: Session, user_id: str):
             encrypted_client_secret="",
             subscription_id="",
             auto_remediate_enabled=True,
-            grace_period_hours=48,
+            grace_period_hours=1,
             budget_threshold_usd=500.0,
         )
         db.add(acc_azure)
     else:
         acc_azure.name = "Demo Azure"
         acc_azure.auto_remediate_enabled = True
-        acc_azure.grace_period_hours = 48
+        acc_azure.grace_period_hours = 1
         acc_azure.budget_threshold_usd = 500.0
 
     db.commit()

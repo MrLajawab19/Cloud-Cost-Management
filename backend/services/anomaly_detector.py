@@ -184,7 +184,7 @@ def _detect_for_service(
         window_start = max(0, i - LOOKBACK_DAYS)
         window       = resid_arr[window_start:i]   # excludes current point
 
-        if len(window) < 3:
+        if len(window) < MIN_RESIDUALS:
             # Not enough history to compute reliable rolling stats
             continue
 

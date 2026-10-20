@@ -220,11 +220,19 @@ def run_suite(engine, is_copy_db: bool = False):
             assert az_in_aws_cost == 0, f"AWS demo account contains {az_in_aws_cost} AzureVM cost records"
             print("  PASS: Provider separation: AWS demo account has ZERO AzureVM resources/cost rows.")
 
+            assert demo_acc.grace_period_hours == 1, f"Expected grace_period_hours=1, got {demo_acc.grace_period_hours}"
+            winner_mape = comp.get("poly_mape") if comp.get("winner") == "Polynomial Regression" else comp.get("hw_mape")
+            assert 3.0 <= winner_mape <= 12.0, f"Expected AWS winner MAPE 3-12%, got {winner_mape}"
+
             anoms = db.query(Anomaly).filter(Anomaly.account_id == demo_acc.id).all()
             print(f"  Anomalies ({len(anoms)}):")
             for a in anoms:
                 print(f"    - {a.service_type} on {a.record_date}: z={a.z_score:.2f} sev={a.severity} driver={a.driver_service}")
-            assert len(anoms) <= 6, f"Expected <= 6 anomalies, got {len(anoms)}"
+            assert len(anoms) <= 4, f"Expected <= 4 anomalies, got {len(anoms)}"
+            for a in anoms:
+                assert a.severity in ["warning", "critical"], f"Unexpected severity {a.severity}"
+                assert (datetime.now(timezone.utc).date() - a.record_date).days <= 16, f"Anomaly too early in history: {a.record_date}"
+
             ec2_anom = [a for a in anoms if a.service_type == "EC2"]
             tot_anom = [a for a in anoms if a.service_type == "TOTAL"]
             assert len(ec2_anom) >= 1 and len(tot_anom) >= 1, "EC2 and TOTAL must be flagged"
@@ -245,6 +253,7 @@ def run_suite(engine, is_copy_db: bool = False):
                 EscalationState.recommendation_id.in_([format_recommendation_id_fk(idle_rec.id, db), str(idle_rec.id)])
             ).first()
             assert esc is not None and esc.status == "pending", f"Expected pending escalation, got {esc}"
+            assert (esc.due_at - esc.created_at).total_seconds() <= 3601, f"Expected ~1h grace period, got {(esc.due_at - esc.created_at).total_seconds()}"
             print(f"  EscalationState pending: id={esc.id}, due_at={esc.due_at}")
 
             # Advance time past due_at
@@ -283,11 +292,19 @@ def run_suite(engine, is_copy_db: bool = False):
             assert non_az_cost == 0, f"Azure demo account contains non-AzureVM cost records: {non_az_cost}"
             print("  PASS: Provider separation: Azure demo account has ONLY AzureVM resources and cost records.")
 
+            assert demo_acc.grace_period_hours == 1, f"Expected grace_period_hours=1, got {demo_acc.grace_period_hours}"
+            winner_mape = comp.get("poly_mape") if comp.get("winner") == "Polynomial Regression" else comp.get("hw_mape")
+            assert 3.0 <= winner_mape <= 12.0, f"Expected Azure winner MAPE 3-12%, got {winner_mape}"
+
             anoms = db.query(Anomaly).filter(Anomaly.account_id == demo_acc.id).all()
             print(f"  Anomalies ({len(anoms)}):")
             for a in anoms:
                 print(f"    - {a.service_type} on {a.record_date}: z={a.z_score:.2f} sev={a.severity} driver={a.driver_service}")
-            assert len(anoms) <= 6, f"Expected <= 6 anomalies, got {len(anoms)}"
+            assert len(anoms) <= 4, f"Expected <= 4 anomalies, got {len(anoms)}"
+            for a in anoms:
+                assert a.severity in ["warning", "critical"], f"Unexpected severity {a.severity}"
+                assert (datetime.now(timezone.utc).date() - a.record_date).days <= 16, f"Anomaly too early in history: {a.record_date}"
+
             az_anom = [a for a in anoms if a.service_type == "AzureVM"]
             tot_anom = [a for a in anoms if a.service_type == "TOTAL"]
             assert len(az_anom) >= 1 and len(tot_anom) >= 1, "AzureVM and TOTAL must be flagged"
