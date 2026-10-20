@@ -5,9 +5,11 @@ All secrets are read from .env (never hardcoded).
 
 from pathlib import Path
 from pydantic_settings import BaseSettings
+from pydantic import field_validator
 from functools import lru_cache
 
 _ENV_PATH = Path(__file__).resolve().parent / ".env"
+_BACKEND_DIR = Path(__file__).resolve().parent
 
 
 class Settings(BaseSettings):
@@ -18,6 +20,18 @@ class Settings(BaseSettings):
 
     # ── Database ─────────────────────────────────────────────────
     database_url: str = "sqlite:///./cloud_cost.db"
+
+    @field_validator("database_url", mode="after")
+    @classmethod
+    def _resolve_sqlite_db_url(cls, v: str) -> str:
+        if v.startswith("sqlite:///"):
+            raw_path = v[len("sqlite:///"):]
+            if raw_path != ":memory:" and raw_path:
+                path_obj = Path(raw_path)
+                if not path_obj.is_absolute():
+                    resolved = (_BACKEND_DIR / path_obj).resolve()
+                    return f"sqlite:///{resolved.as_posix()}"
+        return v
 
     # ── App ──────────────────────────────────────────────────────
     demo_mode: bool = False  # True → use simulated data
