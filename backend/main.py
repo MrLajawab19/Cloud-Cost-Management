@@ -36,6 +36,29 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     logger.info("✅ Database tables ensured.")
 
+    # Ensure demo accounts and reset demo data on startup
+    from database import SessionLocal
+    from models.user import User
+    from models.account import CloudAccount
+    from services.cost_estimator import is_aws_real, is_azure_real
+    from services.demo_data import ensure_demo_accounts, reset_demo_account
+
+    db = SessionLocal()
+    try:
+        users = db.query(User).all()
+        for u in users:
+            ensure_demo_accounts(db, u.id)
+        demo_accounts = [
+            acc for acc in db.query(CloudAccount).all()
+            if not (is_aws_real(acc) or is_azure_real(acc))
+        ]
+        for acc in demo_accounts:
+            reset_demo_account(db, acc)
+    except Exception as e:
+        logger.error(f"Startup demo account sync failed: {e}")
+    finally:
+        db.close()
+
     # Run an immediate collection on startup so the dashboard has data
     logger.info("Running initial data collection…")
     run_collection_pipeline()
@@ -92,7 +115,6 @@ def health_check():
     return {
         "status": "healthy",
         "version": "1.0.0",
-        "demo_mode": settings.demo_mode,
         "region": settings.aws_default_region,
     }
 

@@ -97,15 +97,12 @@ def seed_historical_data(
     rng     = random.Random(account_id)  # deterministic per-account seed
     inserted = 0
 
-    from config import get_settings
-    settings = get_settings()
-
     acc = db.query(CloudAccount).filter(CloudAccount.id == account_id).first()
     has_real_creds = is_aws_real(acc) or is_azure_real(acc)
     
-    if not settings.demo_mode or has_real_creds:
+    if has_real_creds:
         logger.warning(
-            "seed_historical_data aborted: account %s is not in safe demo mode.",
+            "seed_historical_data aborted: account %s has credentials.",
             account_id[:8]
         )
         return 0

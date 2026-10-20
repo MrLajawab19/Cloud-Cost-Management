@@ -49,9 +49,8 @@ def main():
 
     engine, Session = setup_in_memory_db()
 
-    # Monkeypatch scheduler SessionLocal and settings
+    # Monkeypatch scheduler SessionLocal
     scheduler.SessionLocal = Session
-    scheduler.settings.demo_mode = False
 
     db = Session()
 

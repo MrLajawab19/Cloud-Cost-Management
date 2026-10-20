@@ -35,29 +35,27 @@ class AccountResponse(BaseModel):
     name: str
     region: str
     access_key_last_4: str
+    is_demo: bool = False
 
 @router.post("/", response_model=AccountResponse)
 def create_account(account_in: AccountCreate, background_tasks: BackgroundTasks, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    settings = get_settings()
-    
     if account_in.provider == "aws":
         if not account_in.access_key_id or not account_in.secret_access_key:
             raise HTTPException(status_code=400, detail="Missing AWS credentials")
-        if not settings.demo_mode:
-            try:
-                sts = boto3.client(
-                    'sts',
-                    aws_access_key_id=account_in.access_key_id,
-                    aws_secret_access_key=account_in.secret_access_key,
-                    region_name=account_in.region
-                )
-                identity = sts.get_caller_identity()
-            except botocore.exceptions.ClientError as e:
-                raise HTTPException(status_code=400, detail=f"Invalid AWS Credentials: {e}")
-            except Exception as e:
-                raise HTTPException(status_code=400, detail=f"AWS connection error: {e}")
+        try:
+            sts = boto3.client(
+                'sts',
+                aws_access_key_id=account_in.access_key_id,
+                aws_secret_access_key=account_in.secret_access_key,
+                region_name=account_in.region
+            )
+            identity = sts.get_caller_identity()
+        except botocore.exceptions.ClientError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid AWS Credentials: {e}")
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"AWS connection error: {e}")
 
-        encrypted_secret = "" if settings.demo_mode else encrypt_secret(account_in.secret_access_key)
+        encrypted_secret = encrypt_secret(account_in.secret_access_key)
         new_account = CloudAccount(
             user_id=current_user.id,
             name=account_in.name,
@@ -70,18 +68,17 @@ def create_account(account_in: AccountCreate, background_tasks: BackgroundTasks,
         if not account_in.tenant_id or not account_in.client_id or not account_in.client_secret or not account_in.subscription_id:
             raise HTTPException(status_code=400, detail="Missing Azure credentials")
         
-        if not settings.demo_mode:
-            try:
-                from azure.identity import ClientSecretCredential
-                from azure.mgmt.subscription import SubscriptionClient
-                credential = ClientSecretCredential(account_in.tenant_id, account_in.client_id, account_in.client_secret)
-                sub_client = SubscriptionClient(credential)
-                # Verify subscription exists
-                sub = sub_client.subscriptions.get(account_in.subscription_id)
-            except Exception as e:
-                raise HTTPException(status_code=400, detail=f"Invalid Azure Credentials: {e}")
-                
-        encrypted_secret = "" if settings.demo_mode else encrypt_secret(account_in.client_secret)
+        try:
+            from azure.identity import ClientSecretCredential
+            from azure.mgmt.subscription import SubscriptionClient
+            credential = ClientSecretCredential(account_in.tenant_id, account_in.client_id, account_in.client_secret)
+            sub_client = SubscriptionClient(credential)
+            # Verify subscription exists
+            sub = sub_client.subscriptions.get(account_in.subscription_id)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Invalid Azure Credentials: {e}")
+            
+        encrypted_secret = encrypt_secret(account_in.client_secret)
         new_account = CloudAccount(
             user_id=current_user.id,
             name=account_in.name,
@@ -115,11 +112,13 @@ def create_account(account_in: AccountCreate, background_tasks: BackgroundTasks,
         "id": new_account.id,
         "name": new_account.name,
         "region": new_account.region,
-        "access_key_last_4": last_4
+        "access_key_last_4": last_4,
+        "is_demo": False,
     }
 
 @router.get("/", response_model=List[AccountResponse])
 def list_accounts(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from services.cost_estimator import is_aws_real, is_azure_real
     accounts = db.query(CloudAccount).filter(CloudAccount.user_id == current_user.id).all()
     results = []
     for acc in accounts:
@@ -129,20 +128,26 @@ def list_accounts(current_user: User = Depends(get_current_user), db: Session = 
             last_4 = acc.client_id[-4:] if len(acc.client_id) >= 4 else "****"
         else:
             last_4 = "****"
+        is_demo = not (is_aws_real(acc) or is_azure_real(acc))
         results.append({
             "id": acc.id,
             "name": acc.name,
             "region": acc.region,
-            "access_key_last_4": last_4
+            "access_key_last_4": last_4,
+            "is_demo": is_demo,
         })
     return results
 
 @router.delete("/{account_id}")
 def delete_account(account_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from services.cost_estimator import is_aws_real, is_azure_real
     acc = db.query(CloudAccount).filter(CloudAccount.id == account_id, CloudAccount.user_id == current_user.id).first()
     if not acc:
         raise HTTPException(status_code=404, detail="Account not found")
     
+    if not (is_aws_real(acc) or is_azure_real(acc)):
+        raise HTTPException(status_code=403, detail="Cannot delete demo account")
+
     db.delete(acc)
     db.commit()
     return {"message": "Account deleted successfully"}

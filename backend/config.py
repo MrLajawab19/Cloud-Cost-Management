@@ -34,7 +34,6 @@ class Settings(BaseSettings):
         return v
 
     # ── App ──────────────────────────────────────────────────────
-    demo_mode: bool = False  # True → use simulated data
     collection_interval_hours: int = 6
     secret_key: str = "change_me"
 

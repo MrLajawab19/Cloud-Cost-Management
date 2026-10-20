@@ -47,28 +47,25 @@ def run_collection_pipeline(user_id=None, account_id=None):
             query = query.filter(CloudAccount.id == account_id)
             
         accounts = query.all()
-        if not accounts and not settings.demo_mode:
-            logger.info("No AWS Accounts matching criteria. Skipping collection.")
+        if not accounts:
+            logger.info("No accounts matching criteria. Skipping collection.")
             return
 
         all_resources = []
         synced_account_ids = []
         failed_services_by_account = {}
-        if settings.demo_mode:
-            for acc in accounts:
-                if acc.provider == 'aws':
-                    resources = aws_collector.collect_demo_data()
-                elif acc.provider == 'azure':
-                    resources = azure_collector.collect_demo_data()
-                else:
-                    continue
+
+        for acc in accounts:
+            has_real_creds = is_aws_real(acc) or is_azure_real(acc)
+            if not has_real_creds:
+                from services.demo_data import generate_demo_resources
+                resources = generate_demo_resources(acc)
                 for r in resources:
-                    r["account_id"] = acc.id
+                    if "account_id" not in r or not r["account_id"]:
+                        r["account_id"] = acc.id
                 all_resources.extend(resources)
                 synced_account_ids.append(acc.id)
-            logger.info("DEMO MODE: Using simulated AWS and Azure data.")
-        else:
-            for acc in accounts:
+            else:
                 try:
                     if acc.provider == 'aws':
                         decrypted_secret = decrypt_secret(acc.encrypted_secret_key)
@@ -109,24 +106,13 @@ def run_collection_pipeline(user_id=None, account_id=None):
         # Upsert resources and delete stale ones for synced accounts
         upsert_resources(db, all_resources, synced_account_ids, failed_services_by_account=failed_services_by_account)
 
-        # Backfill history only for accounts that have BOTH:
-        #   (a) demo_mode is True AND
-        #   (b) no real encrypted_secret_key (i.e., a true demo/sandbox account)
-        # Either condition failing skips seeding to prevent synthetic rows
-        # from being written into accounts that hold real AWS credentials. (FR-2)
         target_accounts_map = {acc.id: acc for acc in accounts}
         for acc_id in (synced_account_ids if synced_account_ids else [acc.id for acc in accounts]):
             acc = target_accounts_map.get(acc_id)
             has_real_creds = is_aws_real(acc) or is_azure_real(acc)
-            if not settings.demo_mode:
-                logger.debug(
-                    "seed_historical_data: skipping account %s — demo_mode is False.", acc_id[:8]
-                )
-                continue
             if has_real_creds:
                 logger.warning(
-                    "seed_historical_data: skipping account %s — demo_mode=True but real "
-                    "encrypted_secret_key is present. Will not seed a real-credential account.",
+                    "seed_historical_data: skipping account %s — real credentials present. Will not seed a real-credential account.",
                     acc_id[:8],
                 )
                 continue

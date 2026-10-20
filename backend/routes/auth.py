@@ -44,6 +44,12 @@ def register(user_in: UserCreate, db: Session = Depends(get_db)):
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
+
+    from services.demo_data import ensure_demo_accounts, reset_demo_account
+    acc_aws, acc_azure = ensure_demo_accounts(db, new_user.id)
+    reset_demo_account(db, acc_aws)
+    reset_demo_account(db, acc_azure)
+
     return new_user
 
 @router.post("/login", response_model=Token)

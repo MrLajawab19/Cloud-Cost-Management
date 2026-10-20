@@ -26,7 +26,6 @@ import sqlite3
 from cryptography.fernet import Fernet
 
 print("\n--- INITIAL LOAD ---")
-print(f"DEMO_MODE: {settings.demo_mode}")
 if settings.database_url:
     print(f"DATABASE_URL scheme: {settings.database_url.split('://')[0]}")
 if settings.secret_key:
