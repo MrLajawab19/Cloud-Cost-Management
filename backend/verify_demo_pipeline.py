@@ -382,9 +382,9 @@ def main():
 
     # 2. Run on copy of live DB if DATABASE_URL points to a copy
     copy_url = os.environ.get("DATABASE_URL")
-    if copy_url and "verify_copy.db" in copy_url:
+    if copy_url and not copy_url.endswith("/cloud_cost.db"):
         print("\n\n" + "#" * 60)
-        print("RUNNING SUITE ON COPY OF LIVE DB VIA DATABASE_URL")
+        print(f"RUNNING SUITE ON COPY OF LIVE DB: {copy_url}")
         print("#" * 60)
         copy_engine = build_test_engine(copy_url)
         run_suite(copy_engine, is_copy_db=True)

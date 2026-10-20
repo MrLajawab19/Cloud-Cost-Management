@@ -11,6 +11,7 @@ Verification script for Item Q: Demo fast-forward endpoint.
 """
 
 import json
+import os
 import sys
 import uuid
 from pathlib import Path
@@ -36,11 +37,11 @@ from services.security import create_access_token, encrypt_secret
 from services.demo_data import ensure_demo_accounts, reset_demo_account
 
 
-def build_test_engine():
+def build_test_engine(db_url: str = "sqlite:///:memory:"):
     engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
+        db_url,
+        connect_args={"check_same_thread": False} if db_url.startswith("sqlite") else {},
+        poolclass=StaticPool if db_url == "sqlite:///:memory:" else None,
     )
 
     @event.listens_for(engine, "connect")
@@ -58,7 +59,8 @@ def verify_fast_forward():
     print("VERIFYING ITEM Q: DEMO FAST-FORWARD ENDPOINT")
     print("=" * 60)
 
-    engine = build_test_engine()
+    db_url = os.environ.get("DATABASE_URL", "sqlite:///:memory:")
+    engine = build_test_engine(db_url)
     Session = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     scheduler.SessionLocal = Session
 
