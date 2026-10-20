@@ -10,6 +10,7 @@ Usage:
 import argparse
 import hashlib
 import os
+import shutil
 import sqlite3
 import sys
 from datetime import datetime
@@ -36,12 +37,8 @@ def backup_database(src_path: str) -> str:
     if os.path.exists(backup_path):
         os.remove(backup_path)
 
-    # Perform backup using sqlite backup API
-    src_conn = sqlite3.connect(src_path)
-    dst_conn = sqlite3.connect(backup_path)
-    src_conn.backup(dst_conn)
-    dst_conn.close()
-    src_conn.close()
+    # Perform backup using shutil.copy2 to guarantee bit-for-bit identical file hash
+    shutil.copy2(src_path, backup_path)
 
     src_hash = get_file_sha256(src_path)
     backup_hash = get_file_sha256(backup_path)
