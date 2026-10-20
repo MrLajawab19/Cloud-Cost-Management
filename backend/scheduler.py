@@ -19,6 +19,7 @@ from services.cost_estimator import (
 )
 from services.cleanup_advisor import generate_recommendations
 from services.anomaly_detector import detect_anomalies
+from services.exceptions import CollectionFailed
 
 logger    = logging.getLogger(__name__)
 settings  = get_settings()
@@ -52,6 +53,7 @@ def run_collection_pipeline(user_id=None, account_id=None):
 
         all_resources = []
         synced_account_ids = []
+        failed_services_by_account = {}
         if settings.demo_mode:
             for acc in accounts:
                 if acc.provider == 'aws':
@@ -70,12 +72,19 @@ def run_collection_pipeline(user_id=None, account_id=None):
                 try:
                     if acc.provider == 'aws':
                         decrypted_secret = decrypt_secret(acc.encrypted_secret_key)
-                        resources = aws_collector.collect_all(
+                        res = aws_collector.collect_all(
                             access_key_id=acc.access_key_id,
                             secret_access_key=decrypted_secret,
                             region_name=acc.region,
                             account_id=acc.id
                         )
+                        if isinstance(res, tuple):
+                            resources, failed_services = res
+                        elif hasattr(res, "failed_services"):
+                            resources, failed_services = res, res.failed_services
+                        else:
+                            resources, failed_services = res, []
+                        failed_services_by_account[acc.id] = failed_services
                     elif acc.provider == 'azure':
                         resources = azure_collector.collect_all(
                             tenant_id=acc.tenant_id,
@@ -87,13 +96,18 @@ def run_collection_pipeline(user_id=None, account_id=None):
                         )
                     else:
                         continue
+                    for r in resources:
+                        if "account_id" not in r or not r["account_id"]:
+                            r["account_id"] = acc.id
                     all_resources.extend(resources)
                     synced_account_ids.append(acc.id)
+                except CollectionFailed as e:
+                    logger.error(f"CollectionFailed for account {acc.id}: {e}")
                 except Exception as e:
                     logger.error(f"Failed to collect for account {acc.id}: {e}")
 
         # Upsert resources and delete stale ones for synced accounts
-        upsert_resources(db, all_resources, synced_account_ids)
+        upsert_resources(db, all_resources, synced_account_ids, failed_services_by_account=failed_services_by_account)
 
         # Backfill history only for accounts that have BOTH:
         #   (a) demo_mode is True AND

@@ -66,6 +66,8 @@ import time
 from typing import List, Dict, Any, Optional
 from datetime import date
 
+from services.exceptions import CollectionFailed
+
 logger = logging.getLogger(__name__)
 
 # Module-level cache for Azure Cost Management data per subscription_id
@@ -228,7 +230,13 @@ def collect_all(
             return None
 
         # 2. Enumerate VMs
-        for vm in compute_client.virtual_machines.list_all():
+        try:
+            vm_items = list(compute_client.virtual_machines.list_all())
+        except Exception as e:
+            logger.error(f"Azure VM listing failed for account {account_id}: {e}")
+            raise CollectionFailed(f"Azure VM listing failed: {e}") from e
+
+        for vm in vm_items:
             try:
                 vm_id = vm.id
                 vm_name = vm.name
@@ -315,9 +323,12 @@ def collect_all(
             except Exception as e:
                 logger.error(f"Error processing VM {vm.name if hasattr(vm, 'name') else 'unknown'}: {e}")
                 
+    except CollectionFailed:
+        raise
     except Exception as e:
         logger.error(f"Azure collection failed for account {account_id}: {e}")
-        
+        raise CollectionFailed(f"Azure collection failed: {e}") from e
+
     return resources
 
 

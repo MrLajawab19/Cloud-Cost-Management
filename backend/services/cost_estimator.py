@@ -151,7 +151,12 @@ def seed_historical_data(
     return inserted
 
 
-def upsert_resources(db: Session, resources: List[Dict[str, Any]], synced_account_ids: List[str] = None) -> int:
+def upsert_resources(
+    db: Session,
+    resources: List[Dict[str, Any]],
+    synced_account_ids: List[str] = None,
+    failed_services_by_account: Dict[str, List[str]] = None,
+) -> int:
     """
     Insert or update Resource rows based on resource_id.
     Returns count of upserted records.
@@ -180,18 +185,22 @@ def upsert_resources(db: Session, resources: List[Dict[str, Any]], synced_accoun
     logger.info(f"Upserted {count} resources into DB.")
 
     if synced_account_ids:
-        # Delete stale resources that belong to the synced accounts but were not found in AWS
+        # Delete stale resources that belong to the synced accounts but were not found in cloud collection
         fetched_resource_ids = {r["resource_id"] for r in resources}
-        
-        # Build query to find stale resources
-        stale_query = db.query(Resource).filter(Resource.account_id.in_(synced_account_ids))
-        if fetched_resource_ids:
-            stale_query = stale_query.filter(~Resource.resource_id.in_(fetched_resource_ids))
-            
-        stale_count = stale_query.delete(synchronize_session=False)
+        total_stale = 0
+        for acc_id in synced_account_ids:
+            stale_query = db.query(Resource).filter(Resource.account_id == acc_id)
+            if fetched_resource_ids:
+                stale_query = stale_query.filter(~Resource.resource_id.in_(fetched_resource_ids))
+            acc_failed = (failed_services_by_account or {}).get(acc_id, [])
+            if acc_failed:
+                stale_query = stale_query.filter(~Resource.service_type.in_(acc_failed))
+            stale_count = stale_query.delete(synchronize_session=False)
+            total_stale += stale_count
+
         db.commit()
-        if stale_count > 0:
-            logger.info(f"Deleted {stale_count} stale resources from DB.")
+        if total_stale > 0:
+            logger.info(f"Deleted {total_stale} stale resources from DB.")
 
     return count
 

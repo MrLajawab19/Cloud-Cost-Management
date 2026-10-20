@@ -12,9 +12,10 @@ import boto3
 import json
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 
 from config import get_settings
+from services.exceptions import CollectionFailed
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -139,6 +140,7 @@ def collect_ec2_instances(session) -> List[Dict[str, Any]]:
                     })
     except Exception as e:
         logger.error(f"EC2 collection failed: {e}")
+        raise
 
     return resources
 
@@ -196,6 +198,7 @@ def collect_s3_buckets(session) -> List[Dict[str, Any]]:
             })
     except Exception as e:
         logger.error(f"S3 collection failed: {e}")
+        raise
 
     return resources
 
@@ -235,6 +238,7 @@ def collect_rds_instances(session) -> List[Dict[str, Any]]:
                 })
     except Exception as e:
         logger.error(f"RDS collection failed: {e}")
+        raise
 
     return resources
 
@@ -293,26 +297,47 @@ def collect_lambda_functions(session) -> List[Dict[str, Any]]:
                 })
     except Exception as e:
         logger.error(f"Lambda collection failed: {e}")
+        raise
 
     return resources
 
 
-def collect_all(access_key_id: str, secret_access_key: str, region_name: str, account_id: str) -> List[Dict[str, Any]]:
-    """Run all collectors and return combined resource list for an account."""
+def collect_all(access_key_id: str, secret_access_key: str, region_name: str, account_id: str) -> Tuple[List[Dict[str, Any]], List[str]]:
+    """Run all collectors and return combined resource list and failed services list for an account."""
     logger.info(f"Starting AWS resource collection for account {account_id}…")
     session = _get_boto3_session(access_key_id, secret_access_key, region_name)
+
+    # Credential/STS validation
+    try:
+        sts = session.client("sts")
+        sts.get_caller_identity()
+    except Exception as e:
+        logger.error(f"AWS credential/STS failure for account {account_id}: {e}")
+        raise CollectionFailed(f"AWS credential/STS failure: {e}") from e
+
     all_resources = []
-    all_resources.extend(collect_ec2_instances(session))
-    all_resources.extend(collect_s3_buckets(session))
-    all_resources.extend(collect_rds_instances(session))
-    all_resources.extend(collect_lambda_functions(session))
-    
+    failed_services = []
+
+    collectors = [
+        ("EC2", collect_ec2_instances),
+        ("S3", collect_s3_buckets),
+        ("RDS", collect_rds_instances),
+        ("Lambda", collect_lambda_functions),
+    ]
+
+    for svc_name, collector_fn in collectors:
+        try:
+            all_resources.extend(collector_fn(session))
+        except Exception as e:
+            logger.error(f"{svc_name} collection failed for account {account_id}: {e}")
+            failed_services.append(svc_name)
+
     # Append account_id
     for r in all_resources:
         r["account_id"] = account_id
 
-    logger.info(f"Collection complete for account {account_id}. Total resources: {len(all_resources)}")
-    return all_resources
+    logger.info(f"Collection complete for account {account_id}. Total: {len(all_resources)}, Failed services: {failed_services}")
+    return all_resources, failed_services
 
 
 # ══════════════════════════════════════════════════════════════════
