@@ -34,6 +34,7 @@ class AccountResponse(BaseModel):
     id: str
     name: str
     region: str
+    provider: str = "aws"
     access_key_last_4: str
     is_demo: bool = False
 
@@ -133,6 +134,7 @@ def list_accounts(current_user: User = Depends(get_current_user), db: Session = 
             "id": acc.id,
             "name": acc.name,
             "region": acc.region,
+            "provider": acc.provider,
             "access_key_last_4": last_4,
             "is_demo": is_demo,
         })

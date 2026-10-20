@@ -47,13 +47,9 @@ async def lifespan(app: FastAPI):
     try:
         users = db.query(User).all()
         for u in users:
-            ensure_demo_accounts(db, u.id)
-        demo_accounts = [
-            acc for acc in db.query(CloudAccount).all()
-            if not (is_aws_real(acc) or is_azure_real(acc))
-        ]
-        for acc in demo_accounts:
-            reset_demo_account(db, acc)
+            acc_aws, acc_azure = ensure_demo_accounts(db, u.id)
+            reset_demo_account(db, acc_aws)
+            reset_demo_account(db, acc_azure)
     except Exception as e:
         logger.error(f"Startup demo account sync failed: {e}")
     finally:
