@@ -17,7 +17,8 @@ from models.cost_record import Recommendation, format_recommendation_id_fk
 from models.resource import Resource
 from models.remediation import EscalationState, RemediationLog
 from services.security import get_current_user
-from services.escalation_manager import check_anomaly_exclusion
+from services.escalation_manager import check_anomaly_exclusion, process_escalations
+from services.cost_estimator import is_aws_real, is_azure_real
 
 router = APIRouter(prefix="/remediation", tags=["Remediation"])
 
@@ -135,3 +136,85 @@ def get_remediation_status(
         "escalations": escalations_out,
         "logs": logs_out,
     }
+
+
+@router.post("/demo/fast-forward")
+def demo_fast_forward(
+    account_id: str = Query(..., description="Demo account ID to fast-forward"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Fast-forward pending escalations on a UUID5 demo account to mature immediately.
+    Allowed only for UUID5 demo accounts with no credentials.
+    """
+    acc = db.query(CloudAccount).filter(CloudAccount.id == account_id).first()
+    if not acc:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    if str(acc.user_id) != str(current_user.id):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    if is_aws_real(acc) or is_azure_real(acc):
+        raise HTTPException(status_code=403, detail="Fast-forward not allowed on accounts with credentials")
+
+    if acc.id == "00000000-0000-0000-0000-demoaccount01":
+        raise HTTPException(status_code=403, detail="Fast-forward not allowed on legacy demo account")
+
+    try:
+        u_uuid = uuid.UUID(str(current_user.id))
+        valid_demo_ids = {
+            str(uuid.uuid5(u_uuid, "demo-aws")),
+            str(uuid.uuid5(u_uuid, "demo-azure")),
+        }
+    except Exception:
+        valid_demo_ids = set()
+
+    if acc.id not in valid_demo_ids:
+        raise HTTPException(status_code=403, detail="Fast-forward allowed only for UUID5 demo accounts")
+
+    # Match recommendations for this account
+    recs = db.query(Recommendation).filter(Recommendation.account_id == acc.id).all()
+    rec_id_strs = set()
+    for r in recs:
+        rec_id_strs.add(str(r.id))
+        try:
+            rec_id_strs.add(format_recommendation_id_fk(r.id, db))
+        except Exception:
+            pass
+
+    # Find pending escalations for this account
+    all_pending = db.query(EscalationState).filter(
+        EscalationState.status.in_(["pending", "escalated"])
+    ).all()
+
+    now = datetime.utcnow()
+    fast_forwarded_count = 0
+    for esc in all_pending:
+        is_match = False
+        if esc.recommendation_id in rec_id_strs:
+            is_match = True
+        else:
+            try:
+                if str(uuid.UUID(esc.recommendation_id)) in rec_id_strs:
+                    is_match = True
+            except Exception:
+                pass
+
+        if is_match:
+            esc.due_at = now
+            fast_forwarded_count += 1
+
+    db.commit()
+
+    # Call the real escalation-processing function once
+    process_escalations(db)
+
+    # Return the same JSON shape as GET /remediation/status plus a "processed" summary
+    status_response = get_remediation_status(account_id=acc.id, current_user=current_user, db=db)
+    status_response["processed"] = {
+        "account_id": acc.id,
+        "fast_forwarded_count": fast_forwarded_count,
+        "executed_at": now.isoformat(),
+    }
+    return status_response
