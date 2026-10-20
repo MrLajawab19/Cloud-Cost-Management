@@ -83,3 +83,22 @@ class Recommendation(Base):
 
     def __repr__(self):
         return f"<Recommendation {self.resource_id} [{self.severity}] {self.issue}>"
+
+
+def format_recommendation_id_fk(rec_id, db=None) -> str:
+    """Format recommendation_id (uuid.UUID or str) using Recommendation.id's dialect bind processor."""
+    if not isinstance(rec_id, uuid.UUID):
+        rec_id = uuid.UUID(str(rec_id))
+    dialect = None
+    if db is not None:
+        bind = getattr(db, "bind", None)
+        if bind is not None:
+            dialect = getattr(bind, "dialect", None)
+    if dialect is None:
+        from database import engine
+        dialect = engine.dialect
+    proc = Recommendation.__table__.c.id.type.bind_processor(dialect)
+    if proc:
+        return str(proc(rec_id))
+    return str(rec_id)
+

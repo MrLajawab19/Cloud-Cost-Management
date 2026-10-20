@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 import uuid
 
 from models.resource import Resource
-from models.cost_record import Recommendation
+from models.cost_record import Recommendation, format_recommendation_id_fk
 from models.remediation import EscalationState
 
 logger = logging.getLogger(__name__)
@@ -185,8 +185,9 @@ def generate_recommendations(db: Session) -> int:
             stale_count += 1
             
             # Cancel any associated pending escalation
+            rec_fk = format_recommendation_id_fk(rec.id, db)
             escalation = db.query(EscalationState).filter(
-                EscalationState.recommendation_id == str(rec.id),
+                EscalationState.recommendation_id.in_([rec_fk, str(rec.id)]),
                 EscalationState.status.in_(["pending", "escalated"])
             ).first()
             if escalation:
@@ -246,7 +247,7 @@ def _upsert_rec(db: Session, keys_set: set, r: Resource, issue: str, desc: str, 
             
             escalation = EscalationState(
                 id=str(uuid.uuid4()),
-                recommendation_id=str(new_rec.id),
+                recommendation_id=format_recommendation_id_fk(new_rec.id, db),
                 status="pending",
                 due_at=datetime.utcnow() + timedelta(hours=grace_hours)
             )
