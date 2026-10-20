@@ -82,7 +82,7 @@ def main():
 
     user2 = db.query(User).filter(User.id != account.user_id).first()
     if not user2:
-        user2 = User(email="test2@example.com", hashed_password="pw")
+        user2 = User(email="test2@example.com", password_hash="pw")
         db.add(user2)
         db.commit()
         db.refresh(user2)
