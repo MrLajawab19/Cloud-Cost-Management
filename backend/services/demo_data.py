@@ -308,7 +308,7 @@ def seed_demo_history(db: Session, account: CloudAccount, days: int = 45):
             t = days - day_offset
             for svc, p in profiles.items():
                 trend = p["trend"] * t
-                noise = 0.12 * math.sin(t * 1.5) if svc == "EC2" else 0.0
+                noise = 0.08 * math.sin(t * 1.5) if svc == "EC2" else 0.0
                 daily_cost = max(0.001, p["base"] + trend + noise)
 
                 # ONE deliberate EC2 cost spike (+80% for 2 days) on days 10 and 9 before today
@@ -334,7 +334,13 @@ def seed_demo_history(db: Session, account: CloudAccount, days: int = 45):
             rec_date = today - timedelta(days=day_offset)
             t = days - day_offset
             trend = profile["trend"] * t
-            daily_cost = max(0.001, profile["base"] + trend)
+            noise = 0.35 * math.sin(t * 1.3)
+            daily_cost = max(0.001, profile["base"] + trend + noise)
+
+            # ONE small AzureVM cost spike about 7 days before today (relative to today)
+            if day_offset == 7:
+                daily_cost *= 1.55
+
             source = "synthetic_seed" if day_offset > 1 else "azure_demo"
             cr = CostRecord(
                 account_id=acc_id,
@@ -474,6 +480,5 @@ def reset_demo_account(db: Session, acc: CloudAccount):
 
     generate_recommendations(db)
     generate_sp_recommendations(db, acc_id)
-    if acc.provider == "aws":
-        detect_anomalies(db, [acc_id])
+    detect_anomalies(db, [acc_id])
     db.commit()
