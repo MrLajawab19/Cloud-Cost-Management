@@ -54,13 +54,16 @@ def main():
     print("\n--- 2. Testing Escalation Execution ---")
     res_id = "i-exec-test-123"
 
+    from models.cost_record import format_recommendation_id_fk
+
     # Cleanup prior runs for this resource
+    prior_recs = db.query(Recommendation).filter_by(resource_id=res_id).all()
+    prior_fks = [format_recommendation_id_fk(r.id, db) for r in prior_recs] + [str(r.id) for r in prior_recs]
+    if prior_fks:
+        db.query(EscalationState).filter(
+            EscalationState.recommendation_id.in_(prior_fks)
+        ).delete(synchronize_session=False)
     db.query(Recommendation).filter_by(resource_id=res_id).delete()
-    db.query(EscalationState).filter(
-        EscalationState.recommendation_id.in_(
-            [str(r.id) for r in db.query(Recommendation).filter_by(resource_id=res_id).all()]
-        )
-    ).delete(synchronize_session=False)
     # Clear any leftover EC2 anomalies from prior test runs so they don't block this execution test
     db.query(Anomaly).filter_by(account_id=account.id, service_type="EC2").delete()
     db.commit()
@@ -81,7 +84,7 @@ def main():
     
     esc_due = EscalationState(
         id=str(uuid.uuid4()),
-        recommendation_id=str(due_rec.id),
+        recommendation_id=format_recommendation_id_fk(due_rec.id, db),
         status="pending",
         due_at=datetime.datetime.utcnow() - datetime.timedelta(hours=1) # Past due
     )
@@ -134,7 +137,7 @@ def main():
 
     esc_due_2 = EscalationState(
         id=str(uuid.uuid4()),
-        recommendation_id=str(due_rec_2.id),
+        recommendation_id=format_recommendation_id_fk(due_rec_2.id, db),
         status="pending",
         due_at=datetime.datetime.utcnow() - datetime.timedelta(hours=1)  # Past due
     )

@@ -25,12 +25,14 @@ def main():
             region="us-east-1",
             status="running",
             cpu_utilization_avg=0.5, # CPU < 1.0 (Idle)
-            runtime_hours=200
+            runtime_hours=200,
+            estimated_monthly_cost=50.0,
         )
         db.add(r)
         db.commit()
     else:
         r.cpu_utilization_avg = 0.5
+        r.estimated_monthly_cost = 50.0
         db.commit()
 
     # Clear existing recommendations for this resource to get a clean start
@@ -49,7 +51,8 @@ def main():
         print("  FAILURE: Stop recommendation not found.")
         return
 
-    esc = db.query(EscalationState).filter_by(recommendation_id=str(rec.id)).first()
+    from models.cost_record import format_recommendation_id_fk
+    esc = db.query(EscalationState).filter(EscalationState.recommendation_id == format_recommendation_id_fk(rec.id, db)).first()
     if esc and esc.status == "pending":
         print("  SUCCESS: EscalationState created and is pending.")
     else:
@@ -68,7 +71,7 @@ def main():
     # Run collection again
     generate_recommendations(db)
     
-    esc_after = db.query(EscalationState).filter_by(recommendation_id=str(rec.id)).all()
+    esc_after = db.query(EscalationState).filter(EscalationState.recommendation_id == format_recommendation_id_fk(rec.id, db)).all()
     if len(esc_after) == 1 and esc_after[0].id == old_esc_id and esc_after[0].due_at == old_due_at:
         print("  SUCCESS: EscalationState remained identical, NOT recreated on upsert.")
     else:
