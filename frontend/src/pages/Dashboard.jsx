@@ -6,6 +6,7 @@ import {
 } from 'recharts'
 import { DollarSign, Server, AlertTriangle, TrendingUp, Cpu, HardDrive, ShieldAlert, CheckCircle } from 'lucide-react'
 import { costsAPI, recommendationsAPI, anomaliesAPI } from '../api/client'
+import { useAuth } from '../contexts/AuthContext'
 import { Link } from 'react-router-dom'
 import { SimulationModal } from './Simulations'
 
@@ -41,6 +42,7 @@ const AnomalyDot = (props) => {
 }
 
 export default function Dashboard() {
+  const { activeAccount } = useAuth()
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState({
     summary: null,
@@ -122,7 +124,7 @@ export default function Dashboard() {
         <div className="metric-card">
           <div className="metric-top">
             <div className="metric-label">Est. Monthly Cost</div>
-            <div className="metric-trend up">Live</div>
+            <div className="metric-trend up">{activeAccount?.is_demo ? 'Live' : 'Estimated (list price)'}</div>
           </div>
           <div className="metric-value">{summary?.total_monthly_cost_usd != null ? `$${summary.total_monthly_cost_usd.toFixed(2)}` : 'Cost unavailable'}</div>
           <div className="metric-sub">Based on current usage</div>
@@ -157,7 +159,7 @@ export default function Dashboard() {
             <div className="metric-label">Monitored Services</div>
           </div>
           <div className="metric-value" style={{ color: 'var(--text-1)' }}>{byService.length}</div>
-          <div className="metric-sub">Across all regions</div>
+          <div className="metric-sub">us-east-1</div>
         </div>
 
         <div className="metric-card">
@@ -313,7 +315,11 @@ export default function Dashboard() {
             )) : (
               <div className="empty-state" style={{ padding: '20px' }}>
                 <CheckCircle size={32} color="var(--color-success)" style={{ marginBottom: 10 }} />
-                <div className="empty-sub">No action items required. Your infrastructure is optimized!</div>
+                <div className="empty-sub">
+                  {(summary?.total_resources || 0) === 0
+                    ? "No resources found in this account"
+                    : "No action items required. Your infrastructure is optimized!"}
+                </div>
               </div>
             )}
           </div>

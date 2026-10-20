@@ -83,4 +83,9 @@ export const healthAPI = {
   check: () => api.get('/health'),
 }
 
+export const remediationAPI = {
+  status:      (params = {}) => api.get('/remediation/status', { params }),
+  fastForward: (accountId)   => api.post(`/remediation/demo/fast-forward?account_id=${accountId}`),
+}
+
 export default api

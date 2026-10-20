@@ -100,21 +100,46 @@ export default function TopBar({ toggleSidebar }) {
       </div>
 
       <div className="topbar-actions" ref={menuRef}>
-        {health?.demo_mode && (
-          <div className="demo-badge">Demo Mode</div>
+        {activeAccount?.is_demo && (
+          <div className="demo-badge" style={{ backgroundColor: '#d97706', color: '#fff', border: '1px solid #b45309' }}>Demo Account</div>
         )}
         
         {/* Account Switcher */}
         <div style={{ position: 'relative', marginRight: '16px' }}>
           <button 
             className="icon-btn" 
-            style={{ padding: '4px 12px', width: 'auto', borderRadius: '4px', background: 'rgba(255,255,255,0.1)' }}
+            style={{ padding: '4px 12px', width: 'auto', borderRadius: '4px', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', gap: '6px' }}
             onClick={() => toggleMenu('account')}
           >
-            <Database size={14} style={{ marginRight: '6px' }} />
+            <Database size={14} />
             <span style={{ fontSize: '13px', fontWeight: 500 }}>
               {activeAccount ? activeAccount.name : 'No Account'}
             </span>
+            {activeAccount && (
+              <span style={{
+                padding: '1px 5px',
+                borderRadius: '3px',
+                fontSize: '10px',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                background: activeAccount.provider === 'azure' ? 'rgba(0, 120, 212, 0.25)' : 'rgba(236, 114, 17, 0.25)',
+                color: activeAccount.provider === 'azure' ? '#60a5fa' : '#fb923c',
+              }}>
+                {activeAccount.provider === 'azure' ? 'Azure' : 'AWS'}
+              </span>
+            )}
+            {activeAccount?.is_demo && (
+              <span style={{
+                padding: '1px 5px',
+                borderRadius: '3px',
+                fontSize: '10px',
+                fontWeight: 700,
+                background: 'rgba(245, 158, 11, 0.25)',
+                color: '#fbbf24',
+              }}>
+                DEMO
+              </span>
+            )}
           </button>
           
           {activeMenu === 'account' && (
@@ -127,50 +152,77 @@ export default function TopBar({ toggleSidebar }) {
                   style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingRight: '8px' }}
                 >
                   <div 
-                    style={{ flex: 1, display: 'flex', justifyContent: 'space-between', cursor: 'pointer', padding: '8px 0', paddingRight: '8px' }}
+                    style={{ flex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', padding: '8px 0', paddingRight: '8px', gap: '8px' }}
                     onClick={() => { switchAccount(acc.id); setActiveMenu(null) }}
                   >
-                    <span>{acc.name}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontWeight: 500 }}>{acc.name}</span>
+                      <span style={{
+                        padding: '1px 5px',
+                        borderRadius: '3px',
+                        fontSize: '9px',
+                        fontWeight: 700,
+                        textTransform: 'uppercase',
+                        background: acc.provider === 'azure' ? 'rgba(0, 120, 212, 0.15)' : 'rgba(236, 114, 17, 0.15)',
+                        color: acc.provider === 'azure' ? '#0078d4' : '#ec7211',
+                      }}>
+                        {acc.provider === 'azure' ? 'Azure' : 'AWS'}
+                      </span>
+                      {acc.is_demo && (
+                        <span style={{
+                          padding: '1px 5px',
+                          borderRadius: '3px',
+                          fontSize: '9px',
+                          fontWeight: 700,
+                          background: 'rgba(245, 158, 11, 0.2)',
+                          color: '#d97706',
+                        }}>
+                          DEMO
+                        </span>
+                      )}
+                    </div>
                     <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{acc.region}</span>
                   </div>
-                  {confirmDeleteId === acc.id ? (
-                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center', padding: '4px 8px' }}>
-                      <span 
+                  {!acc.is_demo && (
+                    confirmDeleteId === acc.id ? (
+                      <div style={{ display: 'flex', gap: '12px', alignItems: 'center', padding: '4px 8px' }}>
+                        <span 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteAccount(acc.id);
+                            setConfirmDeleteId(null);
+                            setActiveMenu(null);
+                          }}
+                          style={{ fontSize: 12, color: '#ff4d4f', cursor: 'pointer', fontWeight: 600 }}
+                          title="Confirm Delete"
+                        >
+                          Yes, Delete
+                        </span>
+                        <span 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setConfirmDeleteId(null);
+                          }}
+                          style={{ fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer' }}
+                          title="Cancel"
+                        >
+                          Cancel
+                        </span>
+                      </div>
+                    ) : (
+                      <div
                         onClick={(e) => {
                           e.stopPropagation();
-                          deleteAccount(acc.id);
-                          setConfirmDeleteId(null);
-                          setActiveMenu(null);
+                          setConfirmDeleteId(acc.id);
                         }}
-                        style={{ fontSize: 12, color: '#ff4d4f', cursor: 'pointer', fontWeight: 600 }}
-                        title="Confirm Delete"
+                        style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', color: 'var(--text-secondary)', padding: '4px' }}
+                        title="Remove Account"
+                        onMouseEnter={(e) => e.currentTarget.style.color = '#ff4d4f'}
+                        onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-secondary)'}
                       >
-                        Yes, Delete
-                      </span>
-                      <span 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setConfirmDeleteId(null);
-                        }}
-                        style={{ fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer' }}
-                        title="Cancel"
-                      >
-                        Cancel
-                      </span>
-                    </div>
-                  ) : (
-                    <div
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setConfirmDeleteId(acc.id);
-                      }}
-                      style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', color: 'var(--text-secondary)', padding: '4px' }}
-                      title="Remove Account"
-                      onMouseEnter={(e) => e.currentTarget.style.color = '#ff4d4f'}
-                      onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-secondary)'}
-                    >
-                      <Trash2 size={14} />
-                    </div>
+                        <Trash2 size={14} />
+                      </div>
+                    )
                   )}
                 </div>
               ))}
