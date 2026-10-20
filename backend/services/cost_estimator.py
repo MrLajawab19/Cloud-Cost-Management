@@ -284,6 +284,7 @@ def get_cost_summary(db: Session, account_ids: List[str]) -> Dict[str, Any]:
             "cost_by_service": {},
             "total_resources": 0,
             "idle_resources": 0,
+            "unknown_cost_resources": 0,
             "potential_savings_usd": 0.0,
             "as_of": datetime.utcnow().isoformat(),
         }
@@ -291,6 +292,8 @@ def get_cost_summary(db: Session, account_ids: List[str]) -> Dict[str, Any]:
     resources = db.query(Resource).filter(Resource.account_id.in_(account_ids)).all()
 
     total_cost = 0.0
+    known_cost_count = 0
+    unknown_cost_count = 0
     cost_by_service: Dict[str, float] = {}
     idle_count = 0
     potential_savings = 0.0
@@ -298,18 +301,28 @@ def get_cost_summary(db: Session, account_ids: List[str]) -> Dict[str, Any]:
     for r in resources:
         if r.estimated_monthly_cost is not None:
             total_cost += r.estimated_monthly_cost
+            known_cost_count += 1
             cost_by_service[r.service_type] = cost_by_service.get(r.service_type, 0.0) + r.estimated_monthly_cost
+        else:
+            unknown_cost_count += 1
 
         if r.is_idle:
             idle_count += 1
             if r.estimated_monthly_cost is not None:
                 potential_savings += r.estimated_monthly_cost
 
+    # If resources exist but every resource has an unknown cost, total is unknown (None -> null)
+    if len(resources) > 0 and known_cost_count == 0:
+        total_monthly = None
+    else:
+        total_monthly = round(total_cost, 2)
+
     return {
-        "total_monthly_cost_usd": round(total_cost, 2),
+        "total_monthly_cost_usd": total_monthly,
         "cost_by_service": {k: round(v, 2) for k, v in cost_by_service.items()},
         "total_resources": len(resources),
         "idle_resources": idle_count,
+        "unknown_cost_resources": unknown_cost_count,
         "potential_savings_usd": round(potential_savings, 2),
         "as_of": datetime.utcnow().isoformat(),
     }
