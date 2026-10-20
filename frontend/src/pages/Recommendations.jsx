@@ -74,7 +74,7 @@ export default function Recommendations() {
           <div className="metric-card stagger-2">
             <div className="metric-label">Potential Savings</div>
             <div className="metric-value" style={{ color: '#34d399' }}>
-              ${(summary.total_potential_savings_usd || 0).toFixed(2)}
+              {summary.total_potential_savings_usd != null ? `$${summary.total_potential_savings_usd.toFixed(2)}` : 'Cost unavailable'}
             </div>
             <div className="metric-sub">Monthly reduction</div>
           </div>

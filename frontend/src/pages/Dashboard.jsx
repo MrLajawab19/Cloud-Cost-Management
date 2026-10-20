@@ -19,11 +19,11 @@ const CustomTooltip = ({ active, payload, label }) => {
       <div className="chart-tooltip">
         <div className="chart-tooltip-label">{label || payload[0].name}</div>
         <div className="chart-tooltip-value">
-          Actual: ${Number(payload[0].payload?.cost).toFixed(2)}
+          Actual: {payload[0].payload?.cost != null ? `$${Number(payload[0].payload.cost).toFixed(2)}` : 'Cost unavailable'}
         </div>
         {payload[0].payload?.forecast_cost_usd !== undefined && (
           <div className="chart-tooltip-value" style={{ color: 'var(--text-3)' }}>
-            Baseline: ${Number(payload[0].payload?.forecast_cost_usd).toFixed(2)}
+            Baseline: {payload[0].payload?.forecast_cost_usd != null ? `$${Number(payload[0].payload.forecast_cost_usd).toFixed(2)}` : '—'}
           </div>
         )}
       </div>
@@ -124,7 +124,7 @@ export default function Dashboard() {
             <div className="metric-label">Est. Monthly Cost</div>
             <div className="metric-trend up">Live</div>
           </div>
-          <div className="metric-value">${summary?.total_monthly_cost_usd?.toFixed(2) || '0.00'}</div>
+          <div className="metric-value">{summary?.total_monthly_cost_usd != null ? `$${summary.total_monthly_cost_usd.toFixed(2)}` : 'Cost unavailable'}</div>
           <div className="metric-sub">Based on current usage</div>
         </div>
 
@@ -272,7 +272,7 @@ export default function Dashboard() {
                     <td>{r.region}</td>
                     <td><span className={`badge badge-${r.status.toLowerCase()}`}>{r.status}</span></td>
                     <td style={{ textAlign: 'right', fontWeight: 700 }}>
-                      ${(r.monthly_cost || 0).toFixed(2)}
+                      {r.monthly_cost != null ? `$${r.monthly_cost.toFixed(2)}` : '-'}
                     </td>
                   </tr>
                 )) : (

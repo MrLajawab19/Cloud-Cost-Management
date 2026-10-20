@@ -6,7 +6,7 @@ import { recommendationsAPI, simulationsAPI } from '../api/client'
 // ── Helpers ───────────────────────────────────────────────────────
 const SVC_COLORS = { EC2: '#ec7211', RDS: '#0073bb', S3: '#1d8102', Lambda: '#6366f1' }
 
-function fmt(v) { return `$${Number(v ?? 0).toFixed(2)}` }
+function fmt(v) { return v != null ? `$${Number(v).toFixed(2)}` : 'Cost unavailable' }
 
 // ── Before/After bar ──────────────────────────────────────────────
 function SimBar({ baseline, simulated, uncertainty }) {

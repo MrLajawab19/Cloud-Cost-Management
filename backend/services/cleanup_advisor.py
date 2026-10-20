@@ -41,32 +41,32 @@ def generate_recommendations(db: Session) -> int:
     new_recs_count = 0
 
     for r in resources:
-        cost = r.estimated_monthly_cost or 0.0
-        
         # -- EC2 Rules --------------------------------------------
         if r.service_type == "EC2":
             if r.status == "running" and (r.runtime_hours or 0) > 168:
-                cpu = r.cpu_utilization_avg or 0
-                
-                # Rule 1: Idle EC2 (Stop)
-                if cpu < 1.0:
-                    _upsert_rec(db, current_cycle_keys, r, 
-                        issue="Idle EC2 Instance",
-                        desc=f"Instance {r.resource_name} ({r.resource_type}) has {cpu:.1f}% CPU. It is completely idle.",
-                        action="Stop the instance.",
-                        remediation_type="stop",
-                        severity=_severity(cost),
-                        savings=cost)
-                        
-                # Rule 2: Underutilized EC2 (Resize)
-                elif 1.0 <= cpu < 5.0:
-                    _upsert_rec(db, current_cycle_keys, r, 
-                        issue="Underutilized EC2 Instance",
-                        desc=f"Instance {r.resource_name} ({r.resource_type}) has {cpu:.1f}% CPU. It is underutilized.",
-                        action="Consider downsizing to a smaller instance type.",
-                        remediation_type="resize",
-                        severity=_severity(cost),
-                        savings=round(cost * 0.6, 2))
+                if r.estimated_monthly_cost is not None:
+                    cost = r.estimated_monthly_cost
+                    cpu = r.cpu_utilization_avg or 0
+                    
+                    # Rule 1: Idle EC2 (Stop)
+                    if cpu < 1.0:
+                        _upsert_rec(db, current_cycle_keys, r, 
+                            issue="Idle EC2 Instance",
+                            desc=f"Instance {r.resource_name} ({r.resource_type}) has {cpu:.1f}% CPU. It is completely idle.",
+                            action="Stop the instance.",
+                            remediation_type="stop",
+                            severity=_severity(cost),
+                            savings=cost)
+                            
+                    # Rule 2: Underutilized EC2 (Resize)
+                    elif 1.0 <= cpu < 5.0:
+                        _upsert_rec(db, current_cycle_keys, r, 
+                            issue="Underutilized EC2 Instance",
+                            desc=f"Instance {r.resource_name} ({r.resource_type}) has {cpu:.1f}% CPU. It is underutilized.",
+                            action="Consider downsizing to a smaller instance type.",
+                            remediation_type="resize",
+                            severity=_severity(cost),
+                            savings=round(cost * 0.6, 2))
 
             if r.status == "stopped":
                 ebs_cost = 0.10 * 30 
@@ -90,13 +90,15 @@ def generate_recommendations(db: Session) -> int:
                     savings=0.0)
 
             elif (r.storage_size_gb or 0) > 500 and (r.request_count or 0) == 0:
-                _upsert_rec(db, current_cycle_keys, r, 
-                    issue="Large Unused S3 Bucket",
-                    desc=f"Bucket '{r.resource_name}' holds {r.storage_size_gb:.1f} GB with zero requests.",
-                    action="Move to Glacier or delete.",
-                    remediation_type="manual",
-                    severity=_severity(cost),
-                    savings=round(cost * 0.9, 2))
+                if r.estimated_monthly_cost is not None:
+                    cost = r.estimated_monthly_cost
+                    _upsert_rec(db, current_cycle_keys, r, 
+                        issue="Large Unused S3 Bucket",
+                        desc=f"Bucket '{r.resource_name}' holds {r.storage_size_gb:.1f} GB with zero requests.",
+                        action="Move to Glacier or delete.",
+                        remediation_type="manual",
+                        severity=_severity(cost),
+                        savings=round(cost * 0.9, 2))
 
         # -- RDS Rules --------------------------------------------
         elif r.service_type == "RDS":

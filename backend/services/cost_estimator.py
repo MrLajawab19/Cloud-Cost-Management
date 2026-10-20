@@ -287,13 +287,14 @@ def get_cost_summary(db: Session, account_ids: List[str]) -> Dict[str, Any]:
     potential_savings = 0.0
 
     for r in resources:
-        cost = r.estimated_monthly_cost or 0.0
-        total_cost += cost
-        cost_by_service[r.service_type] = cost_by_service.get(r.service_type, 0.0) + cost
+        if r.estimated_monthly_cost is not None:
+            total_cost += r.estimated_monthly_cost
+            cost_by_service[r.service_type] = cost_by_service.get(r.service_type, 0.0) + r.estimated_monthly_cost
 
         if r.is_idle:
             idle_count += 1
-            potential_savings += cost
+            if r.estimated_monthly_cost is not None:
+                potential_savings += r.estimated_monthly_cost
 
     return {
         "total_monthly_cost_usd": round(total_cost, 2),

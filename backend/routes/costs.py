@@ -125,7 +125,7 @@ def top_resources_by_cost(
             "region": r.region,
             "status": r.status,
             "resource_type": r.resource_type,
-            "monthly_cost": round(r.estimated_monthly_cost or 0.0, 2),
+            "monthly_cost": round(r.estimated_monthly_cost, 2) if r.estimated_monthly_cost is not None else None,
         }
         for r in resources
     ]

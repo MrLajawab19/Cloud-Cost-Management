@@ -42,7 +42,7 @@ class ResourceOut(BaseModel):
     storage_size_gb: Optional[float]
     request_count: Optional[float]
     runtime_hours: Optional[float]
-    estimated_monthly_cost: float
+    estimated_monthly_cost: Optional[float] = None
     is_idle: bool
     is_flagged: bool
     last_seen: Optional[datetime]

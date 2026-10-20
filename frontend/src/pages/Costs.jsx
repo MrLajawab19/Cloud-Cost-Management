@@ -70,10 +70,10 @@ export default function Costs() {
       {summary && (
         <div className="metric-grid">
           {[
-            { label: 'Total Monthly', value: `$${summary.total_monthly_cost_usd.toFixed(2)}`, sub: 'Current run rate', trend: 'up' },
+            { label: 'Total Monthly', value: summary.total_monthly_cost_usd != null ? `$${summary.total_monthly_cost_usd.toFixed(2)}` : 'Cost unavailable', sub: 'Current run rate', trend: 'up' },
             { label: 'Total Resources', value: summary.total_resources, sub: 'Tracked assets', trend: 'neutral' },
             { label: 'Idle Resources', value: summary.idle_resources, sub: 'Action required', trend: 'down' },
-            { label: 'Potential Savings', value: `$${summary.potential_savings_usd.toFixed(2)}`, sub: 'Per month', trend: 'up' },
+            { label: 'Potential Savings', value: summary.potential_savings_usd != null ? `$${summary.potential_savings_usd.toFixed(2)}` : 'Cost unavailable', sub: 'Per month', trend: 'up' },
           ].map(({ label, value, sub, trend }, i) => (
             <div key={label} className={`metric-card stagger-${i+1}`}>
               <div className="metric-label">{label}</div>
@@ -216,7 +216,7 @@ export default function Costs() {
                     </td>
                     <td>{s.resource_count}</td>
                     <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--text-1)' }}>
-                      ${s.total_cost_usd.toFixed(2)}
+                      {s.total_cost_usd != null ? `$${s.total_cost_usd.toFixed(2)}` : '-'}
                     </td>
                     <td style={{ width: 250, paddingRight: 'var(--s-6)' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--s-3)', justifyContent: 'flex-end' }}>

@@ -188,7 +188,7 @@ export default function TopBar({ toggleSidebar }) {
 
         <div className="topbar-metric" style={{ marginRight: '8px' }}>
           <div className="topbar-metric-label">Est. Monthly:</div>
-          <div className="topbar-metric-value">${cost.toFixed(2)}</div>
+          <div className="topbar-metric-value">{cost != null ? `$${cost.toFixed(2)}` : '-'}</div>
         </div>
 
         <div className="topbar-divider" />
