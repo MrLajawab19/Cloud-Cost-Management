@@ -79,6 +79,7 @@ def list_recommendations(
             "description": r.description,
             "action": r.action,
             "severity": r.severity,
+            "remediation_type": r.remediation_type,
             "potential_savings_usd": r.potential_savings_usd,
             "is_resolved": r.is_resolved,
             "created_at": r.created_at.isoformat() if r.created_at else None,

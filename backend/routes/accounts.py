@@ -150,6 +150,23 @@ def delete_account(account_id: str, current_user: User = Depends(get_current_use
     if not (is_aws_real(acc) or is_azure_real(acc)):
         raise HTTPException(status_code=403, detail="Cannot delete demo account")
 
+    # Delete escalation_states and remediation_logs first to satisfy NO ACTION FK constraints
+    from models.remediation import RemediationLog, EscalationState
+    from models.cost_record import Recommendation, format_recommendation_id_fk
+    recs = db.query(Recommendation).filter(Recommendation.account_id == acc.id).all()
+    rec_id_keys = set()
+    for r in recs:
+        rec_id_keys.add(str(r.id))
+        try:
+            rec_id_keys.add(format_recommendation_id_fk(r.id, db))
+        except Exception:
+            pass
+        if hasattr(r.id, "hex"):
+            rec_id_keys.add(r.id.hex)
+    if rec_id_keys:
+        db.query(EscalationState).filter(EscalationState.recommendation_id.in_(list(rec_id_keys))).delete(synchronize_session=False)
+    db.query(RemediationLog).filter(RemediationLog.account_id == acc.id).delete(synchronize_session=False)
+
     db.delete(acc)
     db.commit()
     return {"message": "Account deleted successfully"}

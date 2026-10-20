@@ -9,6 +9,19 @@ from services.remediation_executor import execute_remediation
 
 logger = logging.getLogger(__name__)
 
+def check_anomaly_exclusion(db: Session, account_id: str, service_type: str):
+    """
+    FR-7.6: Checks if there is an active/unresolved anomaly for this service
+    within the last 14 days.
+    """
+    cutoff = datetime.utcnow() - timedelta(days=14)
+    return db.query(Anomaly).filter(
+        Anomaly.account_id == account_id,
+        Anomaly.record_date >= cutoff.date(),
+        Anomaly.is_resolved == False,
+        Anomaly.service_type == service_type
+    ).first()
+
 def process_escalations(db: Session):
     """
     Evaluates all pending/escalated stop recommendations.
@@ -47,16 +60,7 @@ def process_escalations(db: Session):
                 continue
                 
             # Check FR-7.6 Anomaly Exclusion
-            cutoff = datetime.utcnow() - timedelta(days=14)
-            recent_anomaly = db.query(Anomaly).filter(
-                Anomaly.account_id == rec.account_id,
-                Anomaly.record_date >= cutoff.date(),
-                Anomaly.is_resolved == False,
-                # The issue is we don't have resource-level anomalies, they are service-level.
-                # So we exclude the stop if the service is anomalous.
-                Anomaly.service_type == rec.service_type
-            ).first()
-            
+            recent_anomaly = check_anomaly_exclusion(db, rec.account_id, rec.service_type)
             if recent_anomaly:
                 # We skip execution, but we don't cancel it entirely? 
                 # "shall be excluded from automatic stopping...". We'll just leave it pending/escalated.
