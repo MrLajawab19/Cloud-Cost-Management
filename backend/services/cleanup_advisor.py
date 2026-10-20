@@ -46,27 +46,28 @@ def generate_recommendations(db: Session) -> int:
             if r.status == "running" and (r.runtime_hours or 0) > 168:
                 if r.estimated_monthly_cost is not None:
                     cost = r.estimated_monthly_cost
-                    cpu = r.cpu_utilization_avg or 0
+                    cpu = r.cpu_utilization_avg
                     
-                    # Rule 1: Idle EC2 (Stop)
-                    if cpu < 1.0:
-                        _upsert_rec(db, current_cycle_keys, r, 
-                            issue="Idle EC2 Instance",
-                            desc=f"Instance {r.resource_name} ({r.resource_type}) has {cpu:.1f}% CPU. It is completely idle.",
-                            action="Stop the instance.",
-                            remediation_type="stop",
-                            severity=_severity(cost),
-                            savings=cost)
-                            
-                    # Rule 2: Underutilized EC2 (Resize)
-                    elif 1.0 <= cpu < 5.0:
-                        _upsert_rec(db, current_cycle_keys, r, 
-                            issue="Underutilized EC2 Instance",
-                            desc=f"Instance {r.resource_name} ({r.resource_type}) has {cpu:.1f}% CPU. It is underutilized.",
-                            action="Consider downsizing to a smaller instance type.",
-                            remediation_type="resize",
-                            severity=_severity(cost),
-                            savings=round(cost * 0.6, 2))
+                    if cpu is not None:
+                        # Rule 1: Idle EC2 (Stop)
+                        if cpu < 1.0:
+                            _upsert_rec(db, current_cycle_keys, r, 
+                                issue="Idle EC2 Instance",
+                                desc=f"Instance {r.resource_name} ({r.resource_type}) has {cpu:.1f}% CPU. It is completely idle.",
+                                action="Stop the instance.",
+                                remediation_type="stop",
+                                severity=_severity(cost),
+                                savings=cost)
+                                
+                        # Rule 2: Underutilized EC2 (Resize)
+                        elif 1.0 <= cpu < 5.0:
+                            _upsert_rec(db, current_cycle_keys, r, 
+                                issue="Underutilized EC2 Instance",
+                                desc=f"Instance {r.resource_name} ({r.resource_type}) has {cpu:.1f}% CPU. It is underutilized.",
+                                action="Consider downsizing to a smaller instance type.",
+                                remediation_type="resize",
+                                severity=_severity(cost),
+                                savings=round(cost * 0.6, 2))
 
             if r.status == "stopped":
                 ebs_cost = 0.10 * 30 

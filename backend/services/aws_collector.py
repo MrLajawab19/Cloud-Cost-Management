@@ -55,10 +55,10 @@ def _get_boto3_session(access_key_id: str, secret_access_key: str, region_name: 
 
 
 def _get_cloudwatch_metric(cw_client, namespace: str, metric_name: str,
-                            dimensions: list, days: int = 7) -> float:
+                            dimensions: list, days: int = 7) -> Optional[float]:
     """
     Fetch the average value of a CloudWatch metric over the past N days.
-    Returns 0.0 if no data points exist.
+    Returns None if no data points exist, exception, or AccessDenied; logs a warning.
     """
     end = datetime.now(timezone.utc)
     start = end - timedelta(days=days)
@@ -75,9 +75,11 @@ def _get_cloudwatch_metric(cw_client, namespace: str, metric_name: str,
         points = resp.get("Datapoints", [])
         if points:
             return round(points[0]["Average"], 2)
+        logger.warning(f"CloudWatch no datapoints for {metric_name} ({dimensions})")
+        return None
     except Exception as e:
         logger.warning(f"CloudWatch fetch failed ({metric_name}): {e}")
-    return 0.0
+        return None
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -113,7 +115,7 @@ def collect_ec2_instances(session) -> List[Dict[str, Any]]:
                         runtime_hours = round(delta.total_seconds() / 3600, 2)
 
                     # CPU utilisation (7-day avg)
-                    cpu_avg = 0.0
+                    cpu_avg = None
                     if state == "running":
                         cpu_avg = _get_cloudwatch_metric(
                             cw, "AWS/EC2", "CPUUtilization",
@@ -136,7 +138,7 @@ def collect_ec2_instances(session) -> List[Dict[str, Any]]:
                         "runtime_hours":          runtime_hours,
                         "estimated_monthly_cost": round(monthly_cost, 4),
                         "launch_time":            launch_time,
-                        "is_idle": (state == "running" and cpu_avg < 5.0 and runtime_hours > 168),
+                        "is_idle": (state == "running" and cpu_avg is not None and cpu_avg < 5.0 and runtime_hours > 168),
                     })
     except Exception as e:
         logger.error(f"EC2 collection failed: {e}")
