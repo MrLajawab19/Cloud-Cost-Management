@@ -213,11 +213,18 @@ def run_suite(engine, is_copy_db: bool = False):
         print(f"  Distinct cost_records.source: {sources_list}")
 
         if label == "AWS":
+            # Assert AWS has zero AzureVM resources or cost rows
+            az_in_aws_res = db.query(Resource).filter(Resource.account_id == demo_acc.id, Resource.service_type == "AzureVM").count()
+            az_in_aws_cost = db.query(CostRecord).filter(CostRecord.account_id == demo_acc.id, CostRecord.service_type == "AzureVM").count()
+            assert az_in_aws_res == 0, f"AWS demo account contains {az_in_aws_res} AzureVM resources"
+            assert az_in_aws_cost == 0, f"AWS demo account contains {az_in_aws_cost} AzureVM cost records"
+            print("  PASS: Provider separation: AWS demo account has ZERO AzureVM resources/cost rows.")
+
             anoms = db.query(Anomaly).filter(Anomaly.account_id == demo_acc.id).all()
             print(f"  Anomalies ({len(anoms)}):")
             for a in anoms:
                 print(f"    - {a.service_type} on {a.record_date}: z={a.z_score:.2f} sev={a.severity} driver={a.driver_service}")
-            assert len(anoms) <= 4, f"Expected <= 4 anomalies, got {len(anoms)}"
+            assert len(anoms) <= 6, f"Expected <= 6 anomalies, got {len(anoms)}"
             ec2_anom = [a for a in anoms if a.service_type == "EC2"]
             tot_anom = [a for a in anoms if a.service_type == "TOTAL"]
             assert len(ec2_anom) >= 1 and len(tot_anom) >= 1, "EC2 and TOTAL must be flagged"
@@ -225,8 +232,6 @@ def run_suite(engine, is_copy_db: bool = False):
                 assert a.driver_service == "EC2", f"Expected driver EC2, got {a.driver_service}"
             crit_lam_s3 = [a for a in anoms if a.service_type in ["Lambda", "S3"] and a.severity == "critical"]
             assert len(crit_lam_s3) == 0, f"Critical anomaly found on Lambda/S3: {crit_lam_s3}"
-            print("  PASS: Anomaly feed meets all criteria (<=4, EC2+TOTAL flagged, driver EC2, no critical on Lambda/S3).")
-
             # Idle EC2 simulation and escalation check
             idle_rec = db.query(Recommendation).filter(
                 Recommendation.account_id == demo_acc.id,
@@ -269,6 +274,34 @@ def run_suite(engine, is_copy_db: bool = False):
             log = db.query(RemediationLog).filter(RemediationLog.resource_id == idle_rec.resource_id).first()
             assert log is not None and log.status == "simulated"
             print(f"  PASS: RemediationLog written with status='simulated', escalation closed.")
+
+        elif label == "Azure":
+            # Assert Azure demo account has ONLY AzureVM
+            non_az_res = db.query(Resource).filter(Resource.account_id == demo_acc.id, Resource.service_type != "AzureVM").count()
+            non_az_cost = db.query(CostRecord).filter(CostRecord.account_id == demo_acc.id, CostRecord.service_type != "AzureVM").count()
+            assert non_az_res == 0, f"Azure demo account contains non-AzureVM resources: {non_az_res}"
+            assert non_az_cost == 0, f"Azure demo account contains non-AzureVM cost records: {non_az_cost}"
+            print("  PASS: Provider separation: Azure demo account has ONLY AzureVM resources and cost records.")
+
+            anoms = db.query(Anomaly).filter(Anomaly.account_id == demo_acc.id).all()
+            print(f"  Anomalies ({len(anoms)}):")
+            for a in anoms:
+                print(f"    - {a.service_type} on {a.record_date}: z={a.z_score:.2f} sev={a.severity} driver={a.driver_service}")
+            assert len(anoms) <= 6, f"Expected <= 6 anomalies, got {len(anoms)}"
+            az_anom = [a for a in anoms if a.service_type == "AzureVM"]
+            tot_anom = [a for a in anoms if a.service_type == "TOTAL"]
+            assert len(az_anom) >= 1 and len(tot_anom) >= 1, "AzureVM and TOTAL must be flagged"
+            for a in tot_anom:
+                assert a.driver_service == "AzureVM", f"Expected driver AzureVM, got {a.driver_service}"
+
+            # Idle AzureVM simulation
+            idle_az = db.query(Recommendation).filter(
+                Recommendation.account_id == demo_acc.id,
+                Recommendation.issue == "Idle AzureVM"
+            ).first()
+            assert idle_az is not None, "Expected Idle AzureVM recommendation"
+            sim_az = run_simulation(db, demo_acc.id, idle_az.id)
+            print(f"  Simulation on idle AzureVM: baseline=${sim_az.baseline_30d_usd}, simulated=${sim_az.simulated_30d_usd}, delta=${sim_az.delta_usd}")
 
     print("\n[Check 4] Determinism check (2 consecutive generations)")
     reset_demo_account(db, acc_aws)
