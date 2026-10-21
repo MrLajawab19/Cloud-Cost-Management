@@ -88,4 +88,8 @@ export const remediationAPI = {
   fastForward: (accountId)   => api.post(`/remediation/demo/fast-forward?account_id=${accountId}`),
 }
 
+export const savingsOptimiserAPI = {
+  getPlans: (params = {}) => api.get('/savings-optimiser/plans', { params }),
+}
+
 export default api

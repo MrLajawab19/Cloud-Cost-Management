@@ -10,6 +10,7 @@ import Recommendations from './pages/Recommendations'
 import Predictions     from './pages/Predictions'
 import Anomalies       from './pages/Anomalies'
 import Simulations     from './pages/Simulations'
+import SavingsOptimiser from './pages/SavingsOptimiser'
 import Login           from './pages/Login'
 import Register        from './pages/Register'
 import HomePage        from './pages/HomePage'
@@ -34,13 +35,14 @@ function MainLayout() {
       <div className={`main-content ${isSidebarOpen ? 'sidebar-open' : ''}`}>
         <TopBar toggleSidebar={toggleSidebar} />
         <Routes>
-          <Route path="/dashboard"       element={<Dashboard />}       />
-          <Route path="/resources"       element={<Resources />}       />
-          <Route path="/costs"           element={<Costs />}           />
-          <Route path="/recommendations" element={<Recommendations />} />
-          <Route path="/predictions"     element={<Predictions />}     />
-          <Route path="/anomalies"       element={<Anomalies />}       />
-          <Route path="/simulations"     element={<Simulations />}     />
+          <Route path="/dashboard"         element={<Dashboard />}         />
+          <Route path="/resources"         element={<Resources />}         />
+          <Route path="/costs"             element={<Costs />}             />
+          <Route path="/recommendations"   element={<Recommendations />}   />
+          <Route path="/savings-optimiser" element={<SavingsOptimiser />}  />
+          <Route path="/predictions"       element={<Predictions />}       />
+          <Route path="/anomalies"         element={<Anomalies />}         />
+          <Route path="/simulations"       element={<Simulations />}       />
         </Routes>
       </div>
     </div>

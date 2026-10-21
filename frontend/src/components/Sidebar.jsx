@@ -3,18 +3,19 @@ import { NavLink } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import {
   LayoutDashboard, Server, DollarSign,
-  Lightbulb, TrendingUp, AlertTriangle, FlaskConical, X
+  Lightbulb, TrendingUp, AlertTriangle, FlaskConical, ShieldCheck, X
 } from 'lucide-react'
 import { recommendationsAPI, anomaliesAPI } from '../api/client'
 
 const navItems = [
-  { to: '/dashboard',       icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/resources',       icon: Server,          label: 'Resources'                   },
-  { to: '/costs',           icon: DollarSign,      label: 'Cost Analysis'               },
-  { to: '/recommendations', icon: Lightbulb,       label: 'Recommendations', badge: 'rec' },
-  { to: '/predictions',     icon: TrendingUp,      label: 'ML Predictions'              },
-  { to: '/anomalies',       icon: AlertTriangle,   label: 'Anomalies',       badge: 'anom' },
-  { to: '/simulations',     icon: FlaskConical,    label: 'What-If'                     },
+  { to: '/dashboard',         icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/resources',         icon: Server,          label: 'Resources'                   },
+  { to: '/costs',             icon: DollarSign,      label: 'Cost Analysis'               },
+  { to: '/recommendations',   icon: Lightbulb,       label: 'Recommendations', badge: 'rec' },
+  { to: '/savings-optimiser', icon: ShieldCheck,     label: 'Savings Optimiser'           },
+  { to: '/predictions',       icon: TrendingUp,      label: 'ML Predictions'              },
+  { to: '/anomalies',         icon: AlertTriangle,   label: 'Anomalies',       badge: 'anom' },
+  { to: '/simulations',       icon: FlaskConical,    label: 'What-If'                     },
 ]
 
 export default function Sidebar({ isOpen, closeSidebar }) {
