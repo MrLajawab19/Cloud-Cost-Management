@@ -30,3 +30,10 @@
 - **Idle Runtime Threshold**: Real idle detection requires 168 hours of runtime history (the live EC2 instance reaches this ~27 Oct).
 - **Single Region**: Live AWS scanning is currently restricted to `us-east-1`.
 - **Demo Reset**: Restarting the backend process resets demo accounts and re-arms the demo story.
+
+---
+
+## 4. Client Features Walkthrough
+12. **Resources**: Check "Potential saving / mo" column with issue tags, sort toggle, and "Total identified" sum.
+13. **Savings Optimiser**: Inspect 1Y commitment tiers (No/Partial/All Upfront), break-even metrics, and recommendations.
+14. **Explainable Forecasting**: Expand Cost Analysis services for plain-English driver narratives & 30-day forecast.
