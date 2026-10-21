@@ -7,6 +7,7 @@ export default function Resources() {
   const [resources, setResources] = useState([])
   const [total,     setTotal]     = useState(0)
   const [loading,   setLoading]   = useState(true)
+  const [sortDir,   setSortDir]   = useState('desc')
   const [filters,   setFilters]   = useState({
     service_type: '', status: '', idle_only: false,
   })
@@ -14,13 +15,13 @@ export default function Resources() {
   const load = async () => {
     setLoading(true)
     try {
-      const params = {}
+      const params = { sort: 'saving_desc' }
       if (filters.service_type) params.service_type = filters.service_type
       if (filters.status)       params.status       = filters.status
       if (filters.idle_only)    params.idle_only    = true
       const r = await resourcesAPI.list(params)
-      setResources(r.data.resources)
-      setTotal(r.data.total)
+      setResources(r.data?.resources || [])
+      setTotal(r.data?.total || 0)
     } catch (e) {
       console.error(e)
     } finally {
@@ -29,6 +30,23 @@ export default function Resources() {
   }
 
   useEffect(() => { load() }, [filters])
+
+  const toggleSort = () => {
+    setSortDir(d => d === 'desc' ? 'asc' : 'desc')
+  }
+
+  const displayedResources = [...resources].sort((a, b) => {
+    const valA = a.potential_saving_usd
+    const valB = b.potential_saving_usd
+    if (valA == null && valB == null) return 0
+    if (valA == null) return 1
+    if (valB == null) return -1
+    return sortDir === 'desc' ? valB - valA : valA - valB
+  })
+
+  const totalSavings = displayedResources.reduce((sum, r) => {
+    return sum + (typeof r.potential_saving_usd === 'number' && !isNaN(r.potential_saving_usd) ? r.potential_saving_usd : 0)
+  }, 0)
 
   return (
     <div className="page-content animate-up">
@@ -79,6 +97,13 @@ export default function Resources() {
         </label>
       </div>
 
+      {/* Summary line */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--s-3)' }}>
+        <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-2)' }}>
+          Total identified: <span style={{ color: 'var(--color-success, #10b981)', fontWeight: 700 }}>${totalSavings.toFixed(2)}</span>
+        </div>
+      </div>
+
       {/* Table */}
       <div className="card" style={{ padding: 0 }}>
         <div className="table-wrap">
@@ -98,13 +123,23 @@ export default function Resources() {
                   <th>Status</th>
                   <th>CPU %</th>
                   <th>Storage (GB)</th>
+                  <th
+                    style={{ textAlign: 'right', cursor: 'pointer', userSelect: 'none' }}
+                    onClick={toggleSort}
+                    title="Click to toggle sort order"
+                  >
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      <span>Potential saving / mo</span>
+                      <span style={{ fontSize: 10, color: 'var(--text-3)' }}>{sortDir === 'desc' ? '▼' : '▲'}</span>
+                    </div>
+                  </th>
                   <th style={{ textAlign: 'right' }}>Monthly Cost</th>
                 </tr>
               </thead>
               <tbody>
-                {resources.length === 0 ? (
+                {displayedResources.length === 0 ? (
                   <tr>
-                    <td colSpan={8}>
+                    <td colSpan={9}>
                       <div className="empty-state" style={{ padding: '40px 20px' }}>
                         <div className="empty-icon"><Search size={24} /></div>
                         <div className="empty-title">No resources found</div>
@@ -112,7 +147,7 @@ export default function Resources() {
                       </div>
                     </td>
                   </tr>
-                ) : resources.map(r => (
+                ) : displayedResources.map(r => (
                   <tr key={r.resource_id}>
                     <td className="td-primary">
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -137,7 +172,7 @@ export default function Resources() {
                       </span>
                     </td>
                     <td style={{ color: 'var(--text-3)' }}>
-                      {r.cpu_utilization_avg != null ? (
+                      {r.cpu_utilization_avg != null && !isNaN(r.cpu_utilization_avg) ? (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <div style={{ width: 40, height: 4, background: 'var(--glass-bg-h)', borderRadius: 2, overflow: 'hidden' }}>
                             <div style={{ width: `${Math.min(r.cpu_utilization_avg, 100)}%`, height: '100%', background: r.cpu_utilization_avg > 80 ? 'var(--color-danger)' : 'var(--color-info)' }} />
@@ -147,10 +182,26 @@ export default function Resources() {
                       ) : '—'}
                     </td>
                     <td style={{ color: 'var(--text-3)' }}>
-                      {r.storage_size_gb != null ? r.storage_size_gb.toFixed(2) : '—'}
+                      {r.storage_size_gb != null && !isNaN(r.storage_size_gb) ? r.storage_size_gb.toFixed(2) : '—'}
                     </td>
-                    <td style={{ textAlign: 'right', fontWeight: 700, color: r.estimated_monthly_cost != null ? 'var(--text-1)' : 'var(--text-3)' }}>
-                      {r.estimated_monthly_cost != null ? (
+                    <td style={{ textAlign: 'right' }}>
+                      {r.potential_saving_usd != null && !isNaN(r.potential_saving_usd) ? (
+                        <div>
+                          <div style={{ fontWeight: 700, color: r.potential_saving_usd > 0 ? 'var(--color-success, #10b981)' : 'var(--text-2)' }}>
+                            ${r.potential_saving_usd.toFixed(2)}
+                          </div>
+                          {r.saving_issue && (
+                            <div style={{ fontSize: 10, color: 'var(--text-3)', marginTop: 2 }}>
+                              {r.saving_issue}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span style={{ color: 'var(--text-3)' }}>-</span>
+                      )}
+                    </td>
+                    <td style={{ textAlign: 'right', fontWeight: 700, color: r.estimated_monthly_cost != null && !isNaN(r.estimated_monthly_cost) ? 'var(--text-1)' : 'var(--text-3)' }}>
+                      {r.estimated_monthly_cost != null && !isNaN(r.estimated_monthly_cost) ? (
                         <div>
                           <div>${r.estimated_monthly_cost.toFixed(2)}</div>
                           {r.cost_currency && r.cost_currency !== 'USD' && (

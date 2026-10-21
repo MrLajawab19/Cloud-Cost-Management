@@ -49,6 +49,8 @@ class ResourceOut(BaseModel):
     is_flagged: bool
     last_seen: Optional[datetime]
     launch_time: Optional[datetime]
+    potential_saving_usd: Optional[float] = None
+    saving_issue: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -74,6 +76,9 @@ def list_resources(
     idle_only: bool = Query(
         False, description="Show only idle/underutilized resources"
     ),
+    sort: Optional[str] = Query(
+        None, description="Sort order: saving_desc, etc."
+    ),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     account_id: Optional[str] = Query(None, description="Filter by specific AWS account ID"),
@@ -83,6 +88,7 @@ def list_resources(
     """
     Returns all tracked cloud resources.
     Supports filtering by service type, status, region, and idle flag.
+    Includes potential_saving_usd and saving_issue from active recommendations.
     """
     account_ids = get_user_account_ids(db, current_user, account_id)
     if not account_ids:
@@ -100,12 +106,71 @@ def list_resources(
         query = query.filter(Resource.is_idle == True)
 
     total = query.count()
-    resources = (
-        query.order_by(Resource.estimated_monthly_cost.desc())
-        .offset(skip)
-        .limit(limit)
-        .all()
+
+    from sqlalchemy import func, case
+    from models.cost_record import Recommendation
+
+    saving_sub = (
+        db.query(
+            Recommendation.account_id.label("rec_acc_id"),
+            Recommendation.resource_id.label("rec_res_id"),
+            func.max(Recommendation.potential_savings_usd).label("max_saving")
+        )
+        .filter(
+            Recommendation.account_id.in_(account_ids),
+            Recommendation.is_resolved == False,
+            Recommendation.issue != "No Commitment"
+        )
+        .group_by(Recommendation.account_id, Recommendation.resource_id)
+        .subquery()
     )
+
+    if sort == "saving_desc":
+        query = (
+            query.outerjoin(
+                saving_sub,
+                (Resource.account_id == saving_sub.c.rec_acc_id) &
+                (Resource.resource_id == saving_sub.c.rec_res_id)
+            )
+            .order_by(
+                case((saving_sub.c.max_saving.is_(None), 1), else_=0),
+                saving_sub.c.max_saving.desc(),
+                case((Resource.estimated_monthly_cost.is_(None), 1), else_=0),
+                Resource.estimated_monthly_cost.desc()
+            )
+        )
+    else:
+        query = query.order_by(
+            case((Resource.estimated_monthly_cost.is_(None), 1), else_=0),
+            Resource.estimated_monthly_cost.desc()
+        )
+
+    resources = query.offset(skip).limit(limit).all()
+
+    # Populate potential_saving_usd and saving_issue per resource
+    if resources:
+        res_ids = [r.resource_id for r in resources]
+        recs = (
+            db.query(Recommendation)
+            .filter(
+                Recommendation.account_id.in_(account_ids),
+                Recommendation.resource_id.in_(res_ids),
+                Recommendation.is_resolved == False,
+                Recommendation.issue != "No Commitment"
+            )
+            .order_by(Recommendation.potential_savings_usd.desc())
+            .all()
+        )
+        recs_map = {}
+        for rec in recs:
+            key = (rec.account_id, rec.resource_id)
+            if key not in recs_map:
+                recs_map[key] = rec
+
+        for r in resources:
+            matched_rec = recs_map.get((r.account_id, r.resource_id))
+            r.potential_saving_usd = matched_rec.potential_savings_usd if matched_rec else None
+            r.saving_issue = matched_rec.issue if matched_rec else None
 
     return {"total": total, "resources": resources}
 
@@ -156,4 +221,19 @@ def get_resource(
     resource = db.query(Resource).filter(Resource.resource_id == resource_id).first()
     if not resource or resource.account_id not in account_ids:
         raise HTTPException(status_code=404, detail="Resource not found")
+
+    from models.cost_record import Recommendation
+    matched_rec = (
+        db.query(Recommendation)
+        .filter(
+            Recommendation.account_id == resource.account_id,
+            Recommendation.resource_id == resource.resource_id,
+            Recommendation.is_resolved == False,
+            Recommendation.issue != "No Commitment"
+        )
+        .order_by(Recommendation.potential_savings_usd.desc())
+        .first()
+    )
+    resource.potential_saving_usd = matched_rec.potential_savings_usd if matched_rec else None
+    resource.saving_issue = matched_rec.issue if matched_rec else None
     return resource
