@@ -1,9 +1,23 @@
 
+import os
 import sqlite3
 
-conn = sqlite3.connect(r'd:\Cloud Cost Management\backend\cloud_cost.db')
+db_url = os.environ.get("DATABASE_URL")
+if db_url and db_url.startswith("sqlite:///"):
+    db_path = db_url.replace("sqlite:///", "")
+else:
+    db_path = r'd:\Cloud Cost Management\backend\cloud_cost.db'
+
+print(f"Engine Path: sqlite:///{db_path}")
+conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
 cur = conn.cursor()
 ACCOUNT = 'ba920050-7de7-4e98-935e-ba339b334d84'
+cur.execute('SELECT COUNT(*) FROM cost_records WHERE account_id=?', (ACCOUNT,))
+if cur.fetchone()[0] == 0:
+    cur.execute('SELECT account_id FROM cost_records WHERE source LIKE "%demo%" OR source="synthetic_seed" LIMIT 1')
+    row = cur.fetchone()
+    if row:
+        ACCOUNT = row[0]
 
 print('=== 1b. Region values (tagging proxy) ===')
 cur.execute('SELECT region, COUNT(*) FROM cost_records WHERE account_id=? GROUP BY region', (ACCOUNT,))

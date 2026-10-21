@@ -135,7 +135,7 @@ def _predict_poly(model, X_future: np.ndarray) -> np.ndarray:
 # ══════════════════════════════════════════════════════════════════
 #  MODEL 2 — Double Exponential Smoothing (Holt's method, pure NumPy)
 #
-#  Uses Holt's additive trend (Holt-Winters without seasonality).
+#  Uses Holt's additive trend (double exponential smoothing without seasonality).
 #  Pure NumPy — avoids statsmodels Fortran/LAPACK DLL issues on Windows.
 #  Optimal alpha/beta found via grid search minimizing MSE on training data.
 # ══════════════════════════════════════════════════════════════════
@@ -249,7 +249,7 @@ def _evaluate_models(X: np.ndarray, y: np.ndarray) -> Optional[Dict[str, Any]]:
             p = _predict_hw(m, held_out)
             return {"mape": round(_mape(y_ho, p), 2), "rmse": round(_rmse(y_ho, p), 4)}
         except Exception as e:
-            logger.warning(f"HW evaluation failed: {e}")
+            logger.warning(f"Holt evaluation failed: {e}")
             return {"mape": 999.0, "rmse": 999.0}
 
     poly_r = eval_poly()
@@ -257,7 +257,7 @@ def _evaluate_models(X: np.ndarray, y: np.ndarray) -> Optional[Dict[str, Any]]:
 
     winner_key = "poly" if poly_r["mape"] <= hw_r["mape"] else "hw"
     return {
-        "winner":        "Polynomial Regression" if winner_key == "poly" else "Holt-Winters",
+        "winner":        "Polynomial Regression" if winner_key == "poly" else "Holt's Double ES",
         "winner_key":    winner_key,
         "held_out_days": held_out,
         "poly_mape":     poly_r["mape"],
@@ -298,12 +298,12 @@ def _forecast_total(
         for d, c in zip(fut_dates, preds_p)
     ]
 
-    # Holt-Winters
+    # Holt's Double Exponential Smoothing
     try:
         m_hw    = _train_hw(y)
         preds_h = _predict_hw(m_hw, PREDICT_DAYS)
     except Exception as e:
-        logger.error(f"HW total forecast failed: {e}")
+        logger.error(f"Holt total forecast failed: {e}")
         preds_h = np.full(PREDICT_DAYS, float(np.mean(y)))
 
     forecast_hw = [
@@ -415,7 +415,7 @@ def predict_costs(db: Session, account_ids: List[str]) -> Dict[str, Any]:
 
     New FR-2 fields:
         forecast_poly       — polynomial model 30-day series
-        forecast_hw         — Holt-Winters 30-day series
+        forecast_hw         — Holt's Double ES 30-day series
         model_comparison    — MAPE/RMSE dict (null if < 10 days of data)
         per_service_forecast — normalized per-service breakdown
     """

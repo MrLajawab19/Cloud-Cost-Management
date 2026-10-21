@@ -133,7 +133,7 @@ function ModelComparisonCard({ comparison }) {
         </div>
       </div>
       <ModelRow label="Polynomial Regression" mape={poly_mape} rmse={poly_rmse} isWinner={polyWins} />
-      <ModelRow label="Holt-Winters ES" mape={hw_mape} rmse={hw_rmse} isWinner={!polyWins} />
+      <ModelRow label="Holt's Double ES" mape={hw_mape} rmse={hw_rmse} isWinner={!polyWins} />
       <div style={{ fontSize: 11, color: 'var(--text-3)', paddingTop: 2 }}>
         MAPE = Mean Absolute % Error. RMSE = Root Mean Squared Error. Lower is better.
         Forecast uses the lower-MAPE model.
@@ -457,7 +457,7 @@ export default function Predictions() {
                       dot={false} connectNulls={false}
                     />
                     <Line
-                      type="monotone" dataKey="hw" name="Holt-Winters"
+                      type="monotone" dataKey="hw" name="Holt's Double ES"
                       stroke="#34d399" strokeWidth={2} strokeDasharray="8 3"
                       dot={false} connectNulls={false}
                     />
@@ -553,7 +553,7 @@ export default function Predictions() {
               <div className="card-title-icon" style={{ background: 'rgba(124,58,237,0.12)', color: '#a78bfa' }}>
                 <TrendingUp size={16} />
               </div>
-              Forecast Table — {model_info.type === 'holt_winters' ? 'Holt-Winters' : 'Polynomial Regression'} (Winner)
+              Forecast Table — {model_info.type === 'holt_winters' ? "Holt's Double ES" : 'Polynomial Regression'} (Winner)
             </div>
           </div>
           <div className="table-wrap" style={{ maxHeight: 260, overflowY: 'auto', marginTop: 'var(--s-4)' }}>

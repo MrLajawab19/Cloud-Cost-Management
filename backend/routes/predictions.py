@@ -47,7 +47,7 @@ def get_predictions(
       historical             — past daily actuals [{date, cost}]
       forecast               — winning model 30-day forecast [{date, cost}]
       forecast_poly          — polynomial regression forecast
-      forecast_hw            — Holt-Winters forecast
+      forecast_hw            — Holt's Double Exponential Smoothing forecast
       model_comparison       — MAPE/RMSE comparison (null if < 10 days of data)
       per_service_forecast   — per-service breakdown, normalized to headline total
       monthly_estimate_usd   — projected total for next 30 days
