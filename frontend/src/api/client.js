@@ -52,7 +52,8 @@ export const costsAPI = {
   summary:      ()              => api.get('/costs/summary'),
   trend:        (days = 30)     => api.get('/costs/trend', { params: { days } }),
   byService:    ()              => api.get('/costs/by-service'),
-  topResources: (limit = 8)    => api.get('/costs/top-resources', { params: { limit } }),
+  topResources: (limit = 8)     => api.get('/costs/top-resources', { params: { limit } }),
+  explain:      (params = {})   => api.get('/costs/explain', { params }),
 }
 
 export const recommendationsAPI = {
