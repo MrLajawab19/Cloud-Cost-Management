@@ -147,7 +147,11 @@ export default function Dashboard() {
             <div className="metric-label">Potential Savings</div>
           </div>
           <div className="metric-value" style={{ color: 'var(--color-success)' }}>${recsSummary?.total_potential_savings_usd?.toFixed(2) || '0.00'}</div>
-          <div className="metric-sub">From idle resources</div>
+          <div className="metric-sub">
+            {recList?.some(r => r.remediation_type === 'commitment' || r.action?.includes('Savings Plan') || r.action?.includes('Reserved'))
+              ? 'Idle resources + commitment plans'
+              : 'From idle resources'}
+          </div>
         </div>
 
         <div className="metric-card">
@@ -168,12 +172,16 @@ export default function Dashboard() {
 
         <div className="metric-card">
           <div className="metric-top">
-            <div className="metric-label">Critical Issues</div>
+            <div className="metric-label">High Priority Recs</div>
           </div>
           <div className="metric-value" style={{ color: highPriorityCount > 0 ? 'var(--color-danger)' : 'var(--color-success)' }}>
             {highPriorityCount}
           </div>
-          <div className="metric-sub">{highPriorityCount > 0 ? 'Requires attention' : 'All clear'}</div>
+          <div className="metric-sub">
+            {anomSummary?.critical_count > 0
+              ? `${anomSummary.critical_count} critical anomalies`
+              : (highPriorityCount > 0 ? 'Requires attention' : 'All clear')}
+          </div>
         </div>
       </div>
 
