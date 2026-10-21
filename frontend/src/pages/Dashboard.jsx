@@ -124,7 +124,11 @@ export default function Dashboard() {
         <div className="metric-card">
           <div className="metric-top">
             <div className="metric-label">Est. Monthly Cost</div>
-            <div className="metric-trend up">{activeAccount?.is_demo ? 'Live' : 'Estimated (list price)'}</div>
+            <div className="metric-trend up">
+              {activeAccount?.is_demo
+                ? 'Simulated'
+                : (activeAccount?.provider === 'azure' ? 'Last 30 days actual' : 'Estimated (list price)')}
+            </div>
           </div>
           <div className="metric-value">{summary?.total_monthly_cost_usd != null ? `$${summary.total_monthly_cost_usd.toFixed(2)}` : 'Cost unavailable'}</div>
           <div className="metric-sub">Based on current usage</div>
