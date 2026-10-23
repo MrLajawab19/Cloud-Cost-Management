@@ -81,18 +81,12 @@ def _check_account_access(db: Session, current_user: User, account_id: Optional[
     return acc
 
 
-@router.get("/plans")
-def get_savings_plans(
-    account_id: Optional[str] = Query(None, description="Cloud Account ID"),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-) -> Dict[str, Any]:
+def compute_savings_plans(db: Session, account: CloudAccount) -> Dict[str, Any]:
     """
-    Evaluates commitment options per eligible service (EC2, RDS, AzureVM).
-    Reproduces existing recommendation figures for 1y_partial_upfront exactly.
+    Core commitment evaluation logic per eligible service (EC2, RDS, AzureVM).
     """
-    account = _check_account_access(db, current_user, account_id)
     provider = account.provider.lower()
+
 
     if provider == "azure":
         eligible_services = ["AzureVM"]
@@ -323,3 +317,18 @@ def get_savings_plans(
         "disclaimer": "Illustrative pricing, not live AWS/Azure rates",
         "empty_message": "Not enough history yet - stay pay-as-you-go" if not services_output else None
     }
+
+
+@router.get("/plans")
+def get_savings_plans(
+    account_id: Optional[str] = Query(None, description="Cloud Account ID"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    Evaluates commitment options per eligible service (EC2, RDS, AzureVM).
+    Reproduces existing recommendation figures for 1y_partial_upfront exactly.
+    """
+    account = _check_account_access(db, current_user, account_id)
+    return compute_savings_plans(db, account)
+

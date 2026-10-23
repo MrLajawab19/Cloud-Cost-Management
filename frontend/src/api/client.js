@@ -93,4 +93,10 @@ export const savingsOptimiserAPI = {
   getPlans: (params = {}) => api.get('/savings-optimiser/plans', { params }),
 }
 
+export const demoAPI = {
+  inject: (data, params = {}) => api.post('/demo/inject', data, { params }),
+  reset:  (params = {})       => api.post('/demo/reset', null, { params }),
+}
+
 export default api
+

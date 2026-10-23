@@ -15,7 +15,7 @@ from scheduler import start_scheduler, stop_scheduler, run_collection_pipeline
 # Import all models so SQLAlchemy registers them before create_all
 import models  # Imports __init__.py which has User, AWSAccount, etc.
 
-from routes import resources, costs, recommendations, predictions, auth, accounts, anomalies, simulations, remediation, savings_optimiser
+from routes import resources, costs, recommendations, predictions, auth, accounts, anomalies, simulations, remediation, savings_optimiser, demo
 
 logging.basicConfig(
     level=logging.INFO,
@@ -104,6 +104,8 @@ app.include_router(anomalies.router)
 app.include_router(simulations.router)
 app.include_router(remediation.router)
 app.include_router(savings_optimiser.router)
+app.include_router(demo.router)
+
 
 
 # ── Health Check ─────────────────────────────────────────────────

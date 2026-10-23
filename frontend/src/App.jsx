@@ -11,6 +11,7 @@ import Predictions     from './pages/Predictions'
 import Anomalies       from './pages/Anomalies'
 import Simulations     from './pages/Simulations'
 import SavingsOptimiser from './pages/SavingsOptimiser'
+import LiveDataLab      from './pages/LiveDataLab'
 import Login           from './pages/Login'
 import Register        from './pages/Register'
 import HomePage        from './pages/HomePage'
@@ -43,6 +44,7 @@ function MainLayout() {
           <Route path="/predictions"       element={<Predictions />}       />
           <Route path="/anomalies"         element={<Anomalies />}         />
           <Route path="/simulations"       element={<Simulations />}       />
+          <Route path="/live-data-lab"     element={<LiveDataLab />}       />
         </Routes>
       </div>
     </div>

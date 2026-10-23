@@ -3,11 +3,13 @@ import { NavLink } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import {
   LayoutDashboard, Server, DollarSign,
-  Lightbulb, TrendingUp, AlertTriangle, FlaskConical, ShieldCheck, X
+  Lightbulb, TrendingUp, AlertTriangle, FlaskConical, ShieldCheck, Activity, X
 } from 'lucide-react'
 import { recommendationsAPI, anomaliesAPI } from '../api/client'
+import { useAuth } from '../contexts/AuthContext'
 
 const navItems = [
+
   { to: '/dashboard',         icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/resources',         icon: Server,          label: 'Resources'                   },
   { to: '/costs',             icon: DollarSign,      label: 'Cost Analysis'               },
@@ -19,6 +21,7 @@ const navItems = [
 ]
 
 export default function Sidebar({ isOpen, closeSidebar }) {
+  const { activeAccount } = useAuth()
   const [recCount,  setRecCount]  = useState(0)
   const [anomCount, setAnomCount] = useState(0)
 
@@ -61,7 +64,19 @@ export default function Sidebar({ isOpen, closeSidebar }) {
             )}
           </NavLink>
         ))}
+
+        {activeAccount?.is_demo && (
+          <NavLink
+            to="/live-data-lab"
+            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+            style={{ paddingLeft: '20px' }}
+          >
+            <Activity className="nav-icon" strokeWidth={1.8} />
+            Live Data Lab
+          </NavLink>
+        )}
       </nav>
+
 
       {/* Footer */}
       <div className="sidebar-footer">
