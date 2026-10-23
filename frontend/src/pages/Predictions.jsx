@@ -10,6 +10,7 @@ import {
   BarChart2, Layers, Zap,
 } from 'lucide-react'
 import { predictionsAPI } from '../api/client'
+import { useAuth } from '../contexts/AuthContext'
 
 // ── Service colour palette ────────────────────────────────────────
 const SVC_COLORS = {
@@ -242,6 +243,7 @@ function PerServiceChart({ perService }) {
 
 // ── Main Component ────────────────────────────────────────────────
 export default function Predictions() {
+  const { dataVersion } = useAuth()
   const [data,    setData]    = useState(null)
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState(null)
@@ -252,7 +254,7 @@ export default function Predictions() {
       .then(r => setData(r.data))
       .catch(() => setError('Failed to load predictions. Make sure the backend is running.'))
       .finally(() => setLoading(false))
-  }, [])
+  }, [dataVersion])
 
   if (loading) return <Loading />
   if (error)   return <ErrorState msg={error} />

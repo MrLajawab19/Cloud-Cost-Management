@@ -2,8 +2,10 @@
 import { useState, useEffect } from 'react'
 import { Filter, Search } from 'lucide-react'
 import { resourcesAPI } from '../api/client'
+import { useAuth } from '../contexts/AuthContext'
 
 export default function Resources() {
+  const { dataVersion } = useAuth()
   const [resources, setResources] = useState([])
   const [total,     setTotal]     = useState(0)
   const [loading,   setLoading]   = useState(true)
@@ -29,7 +31,7 @@ export default function Resources() {
     }
   }
 
-  useEffect(() => { load() }, [filters])
+  useEffect(() => { load() }, [filters, dataVersion])
 
   const toggleSort = () => {
     setSortDir(d => d === 'desc' ? 'asc' : 'desc')

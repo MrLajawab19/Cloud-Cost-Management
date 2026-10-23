@@ -1,5 +1,5 @@
 // src/pages/LiveDataLab.jsx — Live Data Lab for Demo Accounts
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Activity, AlertTriangle, TrendingUp, Lightbulb, ShieldCheck,
   RefreshCw, Play, RotateCcw, Info, CheckCircle2, ArrowRight, Zap
@@ -17,21 +17,65 @@ const SCENARIOS = [
 ]
 
 export default function LiveDataLab() {
-  const { activeAccount } = useAuth()
+  const { activeAccount, bumpDataVersion } = useAuth()
 
   const provider = (activeAccount?.provider || 'aws').toLowerCase()
   const isAws = provider === 'aws'
   const isDemo = Boolean(activeAccount?.is_demo)
 
-  const [scenario,   setScenario]   = useState('cost_spike')
-  const [service,    setService]    = useState(isAws ? 'EC2' : 'AzureVM')
-  const [magnitude,  setMagnitude]  = useState(80)
-  const [days,       setDays]       = useState(5)
-  const [loading,    setLoading]    = useState(false)
-  const [resetting,  setResetting]  = useState(false)
-  const [result,     setResult]     = useState(null)
-  const [error,      setError]      = useState(null)
-  const [successMsg, setSuccessMsg] = useState(null)
+  const [scenario,       setScenario]       = useState('cost_spike')
+  const [service,        setService]        = useState(isAws ? 'EC2' : 'AzureVM')
+  const [magnitude,      setMagnitude]      = useState(80)
+  const [days,           setDays]           = useState(5)
+  const [loading,        setLoading]        = useState(false)
+  const [resetting,      setResetting]      = useState(false)
+  const [result,         setResult]         = useState(null)
+  const [lastInjectTime, setLastInjectTime] = useState(null)
+  const [error,          setError]          = useState(null)
+  const [successMsg,     setSuccessMsg]     = useState(null)
+
+  useEffect(() => {
+    if (!activeAccount?.id) {
+      setResult(null)
+      setLastInjectTime(null)
+      return
+    }
+    const key = `demo_lab_inject_${activeAccount.id}`
+    try {
+      // Clear any stored inject from other accounts
+      for (let i = sessionStorage.length - 1; i >= 0; i--) {
+        const k = sessionStorage.key(i)
+        if (k && k.startsWith('demo_lab_inject_') && k !== key) {
+          sessionStorage.removeItem(k)
+        }
+      }
+      const raw = sessionStorage.getItem(key)
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (parsed && parsed.accountId === activeAccount.id && parsed.result) {
+          setResult(parsed.result)
+          if (parsed.timestamp) {
+            const d = new Date(parsed.timestamp)
+            const hh = String(d.getHours()).padStart(2, '0')
+            const mm = String(d.getMinutes()).padStart(2, '0')
+            setLastInjectTime(`${hh}:${mm}`)
+          }
+        } else {
+          sessionStorage.removeItem(key)
+          setResult(null)
+          setLastInjectTime(null)
+        }
+      } else {
+        setResult(null)
+        setLastInjectTime(null)
+      }
+    } catch (e) {
+      console.error('Failed to parse cached injection result:', e)
+      sessionStorage.removeItem(key)
+      setResult(null)
+      setLastInjectTime(null)
+    }
+  }, [activeAccount?.id])
 
   const handleInject = async () => {
     if (!activeAccount?.id) return
@@ -48,6 +92,20 @@ export default function LiveDataLab() {
       const res = await demoAPI.inject(payload, { account_id: activeAccount.id })
       setResult(res.data)
       setSuccessMsg(`Scenario '${scenario}' applied live! Real engine pipeline executed.`)
+      const ts = new Date().toISOString()
+      const d = new Date(ts)
+      const hh = String(d.getHours()).padStart(2, '0')
+      const mm = String(d.getMinutes()).padStart(2, '0')
+      setLastInjectTime(`${hh}:${mm}`)
+      try {
+        sessionStorage.setItem(
+          `demo_lab_inject_${activeAccount.id}`,
+          JSON.stringify({ accountId: activeAccount.id, result: res.data, timestamp: ts })
+        )
+      } catch (e) {
+        console.error('Failed to cache injection result:', e)
+      }
+      bumpDataVersion()
     } catch (err) {
       console.error('Injection failed:', err)
       setError(err?.response?.data?.detail || 'Failed to inject scenario')
@@ -65,6 +123,11 @@ export default function LiveDataLab() {
     try {
       await demoAPI.reset({ account_id: activeAccount.id })
       setResult(null)
+      setLastInjectTime(null)
+      try {
+        sessionStorage.removeItem(`demo_lab_inject_${activeAccount.id}`)
+      } catch (e) {}
+      bumpDataVersion()
       setSuccessMsg(`Demo account '${activeAccount.name}' reset to initial clean state.`)
     } catch (err) {
       console.error('Reset failed:', err)
@@ -270,12 +333,18 @@ export default function LiveDataLab() {
 
       {/* Before / After Comparison Panel */}
       {result && (
-        <div className="card" style={{ padding: 'var(--s-4)', marginBottom: 'var(--s-4)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--s-4)' }}>
-            <div>
-              <h2 style={{ fontSize: '16px', fontWeight: 700, margin: 0, color: 'var(--text-1)' }}>
-                Live Pipeline Evaluation: Before vs. After
-              </h2>
+        <div style={{ marginBottom: 'var(--s-4)' }}>
+          {lastInjectTime && (
+            <div style={{ fontSize: '12px', color: 'var(--text-3)', marginBottom: 'var(--s-2)', fontWeight: 600 }}>
+              Last injection: {lastInjectTime}
+            </div>
+          )}
+          <div className="card" style={{ padding: 'var(--s-4)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--s-4)' }}>
+              <div>
+                <h2 style={{ fontSize: '16px', fontWeight: 700, margin: 0, color: 'var(--text-1)' }}>
+                  Live Pipeline Evaluation: Before vs. After
+                </h2>
               <p style={{ fontSize: '12px', color: 'var(--text-3)', margin: '4px 0 0' }}>
                 Scenario: <strong>{result.scenario}</strong> on account <strong>{result.provider.toUpperCase()}</strong>
               </p>
@@ -427,6 +496,7 @@ export default function LiveDataLab() {
             </div>
           </div>
         </div>
+      </div>
       )}
     </div>
   )

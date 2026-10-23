@@ -161,7 +161,7 @@ export function SimulationModal({ recId, onClose }) {
 
 // ── Main Page ─────────────────────────────────────────────────────
 export default function Simulations() {
-  const { activeAccount } = useAuth()
+  const { activeAccount, dataVersion } = useAuth()
 
   // Recommendations state
   const [recs, setRecs] = useState([])
@@ -202,7 +202,7 @@ export default function Simulations() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [dataVersion])
 
   // Load resource options when activeAccount changes
   const loadResourceOptions = useCallback(async () => {
@@ -222,7 +222,7 @@ export default function Simulations() {
     } catch (e) {
       console.error('Failed to load resource options', e)
     }
-  }, [activeAccount?.id, selectedResId])
+  }, [activeAccount?.id, selectedResId, dataVersion])
 
   useEffect(() => { load() }, [load])
   useEffect(() => { loadResourceOptions() }, [loadResourceOptions])

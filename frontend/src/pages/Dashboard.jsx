@@ -42,7 +42,7 @@ const AnomalyDot = (props) => {
 }
 
 export default function Dashboard() {
-  const { activeAccount } = useAuth()
+  const { activeAccount, dataVersion } = useAuth()
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState({
     summary: null,
@@ -84,7 +84,7 @@ export default function Dashboard() {
       }
     }
     load()
-  }, [])
+  }, [dataVersion])
 
   if (loading) {
     return (

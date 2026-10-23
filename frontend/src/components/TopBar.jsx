@@ -20,7 +20,7 @@ export default function TopBar({ toggleSidebar }) {
   const location = useLocation()
   const { title } = PAGE_TITLES[location.pathname] || { title: 'Dashboard' }
 
-  const { user, logout, accounts, activeAccount, switchAccount, deleteAccount } = useAuth()
+  const { user, logout, accounts, activeAccount, switchAccount, deleteAccount, dataVersion } = useAuth()
   
   const [health, setHealth] = useState(null)
   const [cost, setCost] = useState(0)
@@ -57,7 +57,7 @@ export default function TopBar({ toggleSidebar }) {
     }
   }
 
-  useEffect(() => { loadData() }, [activeAccount])
+  useEffect(() => { loadData() }, [activeAccount, dataVersion])
 
   // Close dropdowns if clicked outside
   useEffect(() => {

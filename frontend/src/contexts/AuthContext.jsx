@@ -8,6 +8,8 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
   const [accounts, setAccounts] = useState([])
   const [activeAccount, setActiveAccount] = useState(null)
+  const [dataVersion, setDataVersion] = useState(0)
+  const bumpDataVersion = () => setDataVersion(v => v + 1)
 
   useEffect(() => {
     const initAuth = async () => {
@@ -98,7 +100,8 @@ export function AuthProvider({ children }) {
   return (
     <AuthContext.Provider value={{
       user, loading, login, register, logout,
-      accounts, activeAccount, loadAccounts, switchAccount, deleteAccount
+      accounts, activeAccount, loadAccounts, switchAccount, deleteAccount,
+      dataVersion, bumpDataVersion
     }}>
       {children}
     </AuthContext.Provider>

@@ -6,6 +6,7 @@ import {
 } from 'recharts'
 import { DollarSign, TrendingUp, Calendar, Filter, ChevronDown, ChevronRight, AlertTriangle, Sparkles } from 'lucide-react'
 import { costsAPI } from '../api/client'
+import { useAuth } from '../contexts/AuthContext'
 
 const SERVICE_COLORS = {
   EC2: '#f97316', S3: '#22c55e', RDS: '#3b82f6', Lambda: '#a78bfa', AzureVM: '#0078d4'
@@ -26,6 +27,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 }
 
 export default function Costs() {
+  const { dataVersion } = useAuth()
   const [summary,     setSummary]     = useState(null)
   const [trend,       setTrend]       = useState([])
   const [byService,   setByService]   = useState([])
@@ -55,7 +57,7 @@ export default function Costs() {
       }
     }
     load()
-  }, [trendDays])
+  }, [trendDays, dataVersion])
 
   const toggleExpand = (srv) => {
     setExpanded(prev => ({ ...prev, [srv]: !prev[srv] }))

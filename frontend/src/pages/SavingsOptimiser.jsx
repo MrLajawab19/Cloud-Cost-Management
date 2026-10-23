@@ -2,8 +2,10 @@
 import { useState, useEffect } from 'react'
 import { Info, AlertCircle, CheckCircle, Lightbulb, Banknote, ShieldAlert } from 'lucide-react'
 import { savingsOptimiserAPI } from '../api/client'
+import { useAuth } from '../contexts/AuthContext'
 
 export default function SavingsOptimiser() {
+  const { dataVersion } = useAuth()
   const [data,    setData]    = useState(null)
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState(null)
@@ -24,7 +26,7 @@ export default function SavingsOptimiser() {
 
   useEffect(() => {
     loadPlans()
-  }, [])
+  }, [dataVersion])
 
   const services = data?.services || []
 

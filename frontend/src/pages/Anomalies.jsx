@@ -9,6 +9,7 @@ import {
   TrendingUp, TrendingDown, Activity, Info,
 } from 'lucide-react'
 import { anomaliesAPI } from '../api/client'
+import { useAuth } from '../contexts/AuthContext'
 
 // ── Colour helpers ────────────────────────────────────────────────
 const SVC_COLORS = { EC2: '#ec7211', RDS: '#0073bb', S3: '#1d8102', Lambda: '#6366f1' }
@@ -128,6 +129,7 @@ function AnomalyTimeline({ anomalies }) {
 
 // ── Main Component ────────────────────────────────────────────────
 export default function Anomalies() {
+  const { dataVersion } = useAuth()
   const [data,      setData]      = useState(null)
   const [loading,   setLoading]   = useState(true)
   const [error,     setError]     = useState(null)
@@ -148,7 +150,7 @@ export default function Anomalies() {
     } finally {
       setLoading(false)
     }
-  }, [days, sevFilter])
+  }, [days, sevFilter, dataVersion])
 
   useEffect(() => { load() }, [load])
 

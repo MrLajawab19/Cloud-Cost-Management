@@ -21,7 +21,7 @@ const navItems = [
 ]
 
 export default function Sidebar({ isOpen, closeSidebar }) {
-  const { activeAccount } = useAuth()
+  const { activeAccount, dataVersion } = useAuth()
   const [recCount,  setRecCount]  = useState(0)
   const [anomCount, setAnomCount] = useState(0)
 
@@ -32,7 +32,7 @@ export default function Sidebar({ isOpen, closeSidebar }) {
     anomaliesAPI.getSummary({ days: 30 })
       .then(r => setAnomCount(r.data.critical_count || 0))
       .catch(() => {})
-  }, [])
+  }, [dataVersion, activeAccount?.id])
 
   return (
     <aside className={`sidebar ${isOpen ? 'open' : ''}`}>

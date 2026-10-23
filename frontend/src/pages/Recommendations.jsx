@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { SimulationModal } from './Simulations'
 
 export default function Recommendations() {
-  const { activeAccount } = useAuth()
+  const { activeAccount, dataVersion } = useAuth()
   const [recs,          setRecs]          = useState([])
   const [summary,       setSummary]       = useState(null)
   const [loading,       setLoading]       = useState(true)
@@ -73,7 +73,7 @@ export default function Recommendations() {
     }
   }
 
-  useEffect(() => { load() }, [filter, activeAccount?.id])
+  useEffect(() => { load() }, [filter, activeAccount?.id, dataVersion])
 
   if (loading && !summary) {
     return (
