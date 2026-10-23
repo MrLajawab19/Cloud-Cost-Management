@@ -12,6 +12,8 @@ const PAGE_TITLES = {
   '/costs': { title: 'Cost Analysis', sub: '' },
   '/recommendations': { title: 'Recommendations', sub: '' },
   '/predictions': { title: 'ML Predictions', sub: '' },
+  '/simulations': { title: 'What-If Simulations', sub: '' },
+  '/live-data-lab': { title: 'Live Data Lab', sub: '' },
 }
 
 export default function TopBar({ toggleSidebar }) {

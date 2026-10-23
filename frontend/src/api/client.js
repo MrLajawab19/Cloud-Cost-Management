@@ -76,8 +76,10 @@ export const anomaliesAPI = {
 }
 
 export const simulationsAPI = {
-  get:   (recId)  => api.get(`/simulations/${recId}`),
-  batch: (ids)    => api.post('/simulations/batch', { ids }),
+  get:                (recId)       => api.get(`/simulations/${recId}`),
+  batch:              (ids)         => api.post('/simulations/batch', { ids }),
+  getResourceOptions: (accountId)   => api.get('/simulations/resource-options', { params: { account_id: accountId } }),
+  simulateResource:   (data)        => api.post('/simulations/resource', data),
 }
 
 export const healthAPI = {
