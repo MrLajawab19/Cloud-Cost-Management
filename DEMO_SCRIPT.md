@@ -37,3 +37,5 @@
 12. **Resources**: Check "Potential saving / mo" column with issue tags, sort toggle, and "Total identified" sum.
 13. **Savings Optimiser**: Inspect 1Y commitment tiers (No/Partial/All Upfront), break-even metrics, and recommendations.
 14. **Explainable Forecasting**: Expand Cost Analysis services for plain-English driver narratives & 30-day forecast.
+15. **Live Data Lab**: On demo accounts, open **Live Data Lab**, inject synthetic noise/spikes/idle resources, view live real-engine pipeline reactions ({before, after, delta}), and click **Reset Demo State**.
+16. **Resource What-If**: In **What-If Simulations**, model stop/terminate/resize actions on individual resources, review operational side-effects/risks, and build custom multi-action baskets in the Scenario Basket.
