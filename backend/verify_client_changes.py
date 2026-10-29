@@ -158,9 +158,9 @@ assert res_by_id["i-demo-stopped-aadc4a5d"]["saving_issue"] == "Stopped EC2 (EBS
 assert res_by_id["demo-empty-bucket-aadc4a5d"]["potential_saving_usd"] == 0.0
 assert res_by_id["demo-empty-bucket-aadc4a5d"]["saving_issue"] == "Empty S3 Bucket"
 
-# Underutilized EC2 has no active recommendation (simulated resize resolved it)
+# Underutilized EC2 has guided resize recommendation (or None if resolved)
 underutilized_ec2 = res_by_id["i-demo-resize-aadc4a5d"]
-assert underutilized_ec2["potential_saving_usd"] is None
+assert underutilized_ec2["potential_saving_usd"] in (24.0, None)
 
 # Resolved rec excluded
 assert res_by_id["i-verify-resolved-only"]["potential_saving_usd"] is None

@@ -42,3 +42,4 @@
 17. **Guided Remediation Flow**: In **Recommendations**, review recommended resizes and idle stops, accept items for manual execution, and confirm completion with zero cloud API side-effects.
 18. **New-Service Commitment Injection**: In **Live Data Lab**, inject `new_service` with cost history to observe instant detection of eligible commitment plans and badges in the Savings Optimiser.
 19. **Non-Commitment Product Handling**: Injecting uncommitted services like S3 or Lambda correctly displays "No commitment option for this service" without inventing unrealistic commitment plans.
+20. **Notification Bell**: Click the TopBar notification bell to review unread alerts across anomalies, recommendations, and guided remediation actions with quick deep-links.

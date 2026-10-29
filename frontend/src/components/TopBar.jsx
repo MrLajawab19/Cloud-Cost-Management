@@ -1,10 +1,39 @@
 // src/components/TopBar.jsx
-import { useState, useEffect, useRef } from 'react'
-import { useLocation } from 'react-router-dom'
-import { Bell, User, Settings, RefreshCw, CloudCog, Menu, LogOut, ExternalLink, Globe, Plus, Database, Trash2, Moon, Sun } from 'lucide-react'
-import { healthAPI, costsAPI, recommendationsAPI, accountsAPI } from '../api/client'
+import React, { useState, useEffect, useRef } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
+import {
+  Bell, User, Settings, RefreshCw, CloudCog, Menu, LogOut,
+  ExternalLink, Globe, Plus, Database, Trash2, Moon, Sun,
+  AlertTriangle, Lightbulb, Zap
+} from 'lucide-react'
+import { healthAPI, costsAPI, recommendationsAPI, accountsAPI, notificationsAPI } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
 import AddAccountModal from './AddAccountModal'
+
+class NotificationErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props)
+    this.state = { hasError: false }
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error("NotificationErrorBoundary caught error:", error, errorInfo)
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ position: 'relative', marginLeft: '8px' }}>
+          <button className="icon-btn" title="Notifications unavailable">
+            <Bell size={15} color="#aab7b8" />
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 
 const PAGE_TITLES = {
   '/': { title: 'Overview', sub: '' },
@@ -18,6 +47,7 @@ const PAGE_TITLES = {
 
 export default function TopBar({ toggleSidebar }) {
   const location = useLocation()
+  const navigate = useNavigate()
   const { title } = PAGE_TITLES[location.pathname] || { title: 'Dashboard' }
 
   const { user, logout, accounts, activeAccount, switchAccount, deleteAccount, dataVersion } = useAuth()
@@ -31,6 +61,19 @@ export default function TopBar({ toggleSidebar }) {
   // Dropdown states
   const [activeMenu, setActiveMenu] = useState(null) // 'settings', 'profile', 'notifications', 'account', or null
   const menuRef = useRef(null)
+
+  // Notification states
+  const [notifications, setNotifications] = useState([])
+  const storageKey = `read_notifs_${activeAccount?.id || 'all'}`
+  const [readIds, setReadIds] = useState(() => {
+    try {
+      const raw = localStorage.getItem(`read_notifs_${activeAccount?.id || 'all'}`)
+      const parsed = raw ? JSON.parse(raw) : []
+      return Array.isArray(parsed) ? parsed : []
+    } catch {
+      return []
+    }
+  })
 
   const [isDarkMode, setIsDarkMode] = useState(() => {
     return localStorage.getItem('theme') === 'dark'
@@ -70,6 +113,83 @@ export default function TopBar({ toggleSidebar }) {
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [menuRef])
 
+  // Close dropdowns on Escape key
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if (e.key === 'Escape') {
+        setActiveMenu(null)
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
+  // Fetch notifications and prune read IDs
+  const fetchNotifications = async () => {
+    if (!activeAccount?.id) return
+    try {
+      const res = await notificationsAPI.list({ account_id: activeAccount.id, limit: 30 })
+      const list = Array.isArray(res.data) ? res.data : []
+      setNotifications(list)
+
+      const validIds = new Set(list.map(e => e?.id).filter(Boolean))
+      try {
+        const raw = localStorage.getItem(storageKey)
+        const currentRead = raw ? JSON.parse(raw) : []
+        if (Array.isArray(currentRead)) {
+          const pruned = currentRead.filter(id => validIds.has(id))
+          localStorage.setItem(storageKey, JSON.stringify(pruned))
+          setReadIds(pruned)
+        }
+      } catch (err) {
+        console.error("Failed to prune read notification IDs:", err)
+      }
+    } catch (e) {
+      console.error("Notifications fetch failed:", e)
+    }
+  }
+
+  useEffect(() => {
+    fetchNotifications()
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchNotifications()
+      }
+    }, 45000)
+    return () => clearInterval(interval)
+  }, [activeAccount?.id, dataVersion, storageKey])
+
+  const markAsRead = (eventId, link) => {
+    if (eventId) {
+      try {
+        const raw = localStorage.getItem(storageKey)
+        const currentRead = raw ? JSON.parse(raw) : []
+        const updated = Array.isArray(currentRead) && !currentRead.includes(eventId)
+          ? [...currentRead, eventId]
+          : currentRead
+        localStorage.setItem(storageKey, JSON.stringify(updated))
+        setReadIds(updated)
+      } catch (err) {
+        console.error("Failed to mark notification read:", err)
+      }
+    }
+    setActiveMenu(null)
+    if (link) {
+      navigate(link)
+    }
+  }
+
+  const markAllAsRead = (e) => {
+    e.stopPropagation()
+    const allIds = (Array.isArray(notifications) ? notifications : []).map(n => n?.id).filter(Boolean)
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(allIds))
+      setReadIds(allIds)
+    } catch (err) {
+      console.error("Failed to mark all notifications read:", err)
+    }
+  }
+
   const handleRefresh = async () => {
     setRefreshing(true)
     try {
@@ -86,6 +206,35 @@ export default function TopBar({ toggleSidebar }) {
   const toggleMenu = (menu) => {
     setActiveMenu(activeMenu === menu ? null : menu)
   }
+
+  const getNotificationIcon = (type, severity) => {
+    if (severity === 'critical') {
+      return <AlertTriangle size={15} color="#ef4444" />
+    }
+    if (severity === 'warning') {
+      return <AlertTriangle size={15} color="#f59e0b" />
+    }
+    if (type === 'recommendation_created' || type === 'demo_injected') {
+      return <Lightbulb size={15} color="#60a5fa" />
+    }
+    return <Zap size={15} color="#34d399" />
+  }
+
+  const getRelativeTime = (isoString) => {
+    if (!isoString) return ''
+    try {
+      const diffSec = Math.floor((new Date() - new Date(isoString)) / 1000)
+      if (diffSec < 60) return 'just now'
+      if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`
+      if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`
+      return `${Math.floor(diffSec / 86400)}d ago`
+    } catch {
+      return ''
+    }
+  }
+
+  const unreadCount = (Array.isArray(notifications) ? notifications : []).filter(n => n?.id && !readIds.includes(n.id)).length
+  const badgeText = unreadCount > 9 ? '9+' : unreadCount
 
   return (
     <header className="topbar">
@@ -257,6 +406,124 @@ export default function TopBar({ toggleSidebar }) {
           <span style={{ fontSize: '12px', fontWeight: 600 }}>Sync</span>
         </button>
         
+        {/* Notification Bell */}
+        <NotificationErrorBoundary>
+          <div style={{ position: 'relative', marginLeft: '8px' }}>
+            <button 
+              className="icon-btn" 
+              onClick={() => toggleMenu('notifications')}
+              title="Notifications"
+              style={{ position: 'relative' }}
+            >
+              <Bell size={15} color={activeMenu === 'notifications' ? 'white' : '#aab7b8'} />
+              {unreadCount > 0 && (
+                <span style={{
+                  position: 'absolute',
+                  top: '-4px',
+                  right: '-4px',
+                  background: '#ef4444',
+                  color: '#ffffff',
+                  fontSize: '9px',
+                  fontWeight: 700,
+                  padding: '1px 4px',
+                  borderRadius: '8px',
+                  minWidth: '15px',
+                  height: '15px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  lineHeight: 1,
+                  border: '1px solid rgba(0,0,0,0.4)',
+                }}>
+                  {badgeText}
+                </span>
+              )}
+            </button>
+
+            {activeMenu === 'notifications' && (
+              <div 
+                className="dropdown-menu dropdown-menu-right" 
+                style={{ width: '340px', maxHeight: '420px', display: 'flex', flexDirection: 'column', padding: 0 }}
+              >
+                <div 
+                  className="dropdown-header" 
+                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: '1px solid var(--border-color, rgba(255,255,255,0.1))' }}
+                >
+                  <span style={{ fontWeight: 600, fontSize: '13px' }}>
+                    Notifications {unreadCount > 0 ? `(${unreadCount})` : ''}
+                  </span>
+                  {unreadCount > 0 && (
+                    <button
+                      onClick={markAllAsRead}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: 'var(--brand-aws-blue, #60a5fa)',
+                        fontSize: '11px',
+                        cursor: 'pointer',
+                        fontWeight: 500,
+                        padding: '2px 6px',
+                      }}
+                    >
+                      Mark all as read
+                    </button>
+                  )}
+                </div>
+
+                <div style={{ overflowY: 'auto', maxHeight: '340px', flex: 1 }}>
+                  {(!Array.isArray(notifications) || notifications.length === 0) ? (
+                    <div style={{ padding: '24px 16px', textAlign: 'center', color: 'var(--text-secondary, #94a3b8)', fontSize: '12px' }}>
+                      No notifications
+                    </div>
+                  ) : (
+                    notifications.map((n = {}) => {
+                      const isUnread = n.id && !readIds.includes(n.id)
+                      return (
+                        <div
+                          key={n.id || Math.random()}
+                          onClick={() => markAsRead(n.id, n.link)}
+                          style={{
+                            padding: '10px 14px',
+                            borderBottom: '1px solid rgba(255,255,255,0.05)',
+                            cursor: 'pointer',
+                            background: isUnread ? 'rgba(99, 102, 241, 0.08)' : 'transparent',
+                            display: 'flex',
+                            gap: 10,
+                            alignItems: 'flex-start',
+                            transition: 'background 0.15s ease',
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = isUnread ? 'rgba(99, 102, 241, 0.08)' : 'transparent' }}
+                        >
+                          <div style={{ marginTop: '2px', flexShrink: 0 }}>
+                            {getNotificationIcon(n.type, n.severity)}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 6 }}>
+                              <div style={{ fontSize: '12px', fontWeight: isUnread ? 700 : 500, color: 'var(--text-primary, #f1f5f9)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {n.title || 'Notification'}
+                              </div>
+                              <span style={{ fontSize: '10px', color: 'var(--text-secondary, #64748b)', flexShrink: 0 }}>
+                                {getRelativeTime(n.created_at)}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: '11px', color: 'var(--text-secondary, #94a3b8)', marginTop: '2px', lineHeight: 1.3 }}>
+                              {n.message || ''}
+                            </div>
+                          </div>
+                          {isUnread && (
+                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#60a5fa', marginTop: '6px', flexShrink: 0 }} />
+                          )}
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </NotificationErrorBoundary>
+
         {/* Settings */}
         <div style={{ position: 'relative', marginLeft: '8px' }}>
           <button className="icon-btn" onClick={() => toggleMenu('settings')}>

@@ -103,5 +103,9 @@ export const demoAPI = {
   reset:  (params = {})       => api.post('/demo/reset', null, { params }),
 }
 
+export const notificationsAPI = {
+  list: (params = {}) => api.get('/notifications', { params }),
+}
+
 export default api
 
