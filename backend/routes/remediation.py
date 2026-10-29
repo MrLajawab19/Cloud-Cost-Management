@@ -145,7 +145,7 @@ def get_remediation_status(
         actor = "system (simulated)"
         if l.before_state and "Actor: " in l.before_state:
             actor = l.before_state.split("Actor: ")[1].split(" |")[0].strip()
-        elif l.status.startswith("guided_"):
+        elif l.status and l.status.startswith("guided_"):
             actor = current_user.email
 
         logs_out.append({

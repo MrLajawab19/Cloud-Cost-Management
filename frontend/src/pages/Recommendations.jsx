@@ -1,12 +1,47 @@
 // src/pages/Recommendations.jsx — Cleanup recommendations page
-import { useState, useEffect } from 'react'
-import { Lightbulb, CheckCircle, Search, Filter, DollarSign, Zap, Lock, AlertTriangle, ShieldAlert } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import { Lightbulb, CheckCircle, Search, Filter, DollarSign, Zap, Lock, AlertTriangle, ShieldAlert, Info } from 'lucide-react'
 import { recommendationsAPI, remediationAPI, resourcesAPI } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
 import { SimulationModal } from './Simulations'
 
-export default function Recommendations() {
-  const { activeAccount, dataVersion } = useAuth()
+class SectionErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props)
+    this.state = { hasError: false, error: null }
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error }
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error("ErrorBoundary caught error:", error, errorInfo)
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{
+          padding: '12px 16px',
+          margin: '16px 0',
+          borderRadius: '8px',
+          background: 'rgba(239, 68, 68, 0.08)',
+          border: '1px solid rgba(239, 68, 68, 0.25)',
+          color: '#f87171',
+          fontSize: '13px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+        }}>
+          <AlertTriangle size={16} />
+          <span>Could not display this section</span>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
+function RecommendationsContent() {
+  const { activeAccount, dataVersion, bumpDataVersion = () => {} } = useAuth()
   const [recs,          setRecs]          = useState([])
   const [summary,       setSummary]       = useState(null)
   const [loading,       setLoading]       = useState(true)
@@ -134,7 +169,7 @@ export default function Recommendations() {
   return (
     <div className="page-content animate-up">
       {/* Synthetic Pricing Banner */}
-      {recs.some(r => r.action === "Purchase Savings Plan") && (
+      {Array.isArray(recs) && recs.some(r => r.action === "Purchase Savings Plan") && (
         <div className="warning-banner stagger-1" style={{ marginBottom: 20, background: 'rgba(234, 179, 8, 0.1)', color: '#ca8a04', border: '1px solid rgba(234, 179, 8, 0.2)', padding: '12px 16px', borderRadius: 8, display: 'flex', gap: 12, alignItems: 'center' }}>
           <AlertTriangle size={18} />
           <div style={{ fontSize: 13 }}>
@@ -154,7 +189,9 @@ export default function Recommendations() {
           <div className="metric-card stagger-2">
             <div className="metric-label">Potential Savings</div>
             <div className="metric-value" style={{ color: '#34d399' }}>
-              {summary.total_potential_savings_usd != null ? `$${summary.total_potential_savings_usd.toFixed(2)}` : 'Cost unavailable'}
+              {typeof summary.total_potential_savings_usd === 'number' && !isNaN(summary.total_potential_savings_usd)
+                ? `$${summary.total_potential_savings_usd.toFixed(2)}`
+                : 'Cost unavailable'}
             </div>
             <div className="metric-sub">Monthly reduction</div>
           </div>
@@ -209,7 +246,7 @@ export default function Recommendations() {
       </div>
 
       {/* Recommendations list */}
-      {recs.length === 0 ? (
+      {(!Array.isArray(recs) || recs.length === 0) ? (
         <div className="card stagger-3">
           <div className="empty-state">
             <div className="empty-icon" style={{ color: 'var(--color-success)', background: 'rgba(16,185,129,0.1)' }}>
@@ -227,17 +264,17 @@ export default function Recommendations() {
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: 'var(--s-5)' }}>
-          {recs.map((rec, i) => (
-            <div key={rec.id} className={`rec-card stagger-${(i % 4) + 1}`}>
+          {(Array.isArray(recs) ? recs : []).map((rec = {}, i) => (
+            <div key={rec.id || i} className={`rec-card stagger-${(i % 4) + 1}`}>
               <div className="rec-card-header">
-                <div className={`rec-severity-bar ${rec.severity}`} />
+                <div className={`rec-severity-bar ${rec.severity || 'low'}`} />
                 <div style={{ flex: 1 }}>
                   <div className="rec-card-meta" style={{ marginBottom: 'var(--s-2)', display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-                    <span className={`badge badge-${rec.severity}`}>
-                      {rec.severity?.toUpperCase()}
+                    <span className={`badge badge-${rec.severity || 'low'}`}>
+                      {rec.severity?.toUpperCase() || 'INFO'}
                     </span>
-                    <span className={`chip chip-${rec.service_type?.toLowerCase()}`}>
-                      {rec.service_type}
+                    <span className={`chip chip-${rec.service_type?.toLowerCase() || 'default'}`}>
+                      {rec.service_type || 'Cloud'}
                     </span>
                     {rec.remediation_type && (
                       <span style={{
@@ -264,22 +301,22 @@ export default function Recommendations() {
                     }}>
                       {rec.is_resolved ? 'Resolved' : 'Active'}
                     </span>
-                    <span style={{ fontSize: 11, color: 'var(--text-4)' }}>{rec.region}</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-4)' }}>{rec.region || 'global'}</span>
                   </div>
-                  <div className="rec-card-title">{rec.issue}</div>
+                  <div className="rec-card-title">{rec.issue || 'Optimization Notice'}</div>
                 </div>
               </div>
 
               <div className="rec-card-body">
-                <div className="rec-card-desc">{rec.description}</div>
+                <div className="rec-card-desc">{rec.description || 'No description provided.'}</div>
                 <div className="rec-action-box" style={{ marginTop: 'var(--s-4)', display: 'flex', alignItems: 'center', gap: 6 }}>
                   {rec.action === "Purchase Savings Plan" && <Lock size={14} style={{color: '#8b5cf6'}} />}
-                  <div><strong>Action Plan:</strong> {rec.action}</div>
+                  <div><strong>Action Plan:</strong> {rec.action || 'Manual review'}</div>
                 </div>
               </div>
 
               <div className="rec-footer">
-                {rec.potential_savings_usd > 0 ? (
+                {typeof rec.potential_savings_usd === 'number' && rec.potential_savings_usd > 0 ? (
                   <div className="savings-chip">
                     <DollarSign size={14} />
                     Save ${rec.potential_savings_usd.toFixed(2)}/mo
@@ -290,7 +327,7 @@ export default function Recommendations() {
                   </div>
                 )}
                 <div style={{ display: 'flex', gap: 6 }}>
-                  {rec.potential_savings_usd > 0 && (
+                  {typeof rec.potential_savings_usd === 'number' && rec.potential_savings_usd > 0 && (
                     <button
                       id={`sim-inline-${rec.id}`}
                       className="btn btn-sm"
@@ -321,266 +358,287 @@ export default function Recommendations() {
       )}
 
       {/* Guided Remediation Section */}
-      <div className="card stagger-4" style={{ marginTop: 'var(--s-6)' }}>
-        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-          <div>
-            <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Zap size={18} color="#ec7211" />
-              Guided Remediation
+      <SectionErrorBoundary>
+        <div className="card stagger-4" style={{ marginTop: 'var(--s-6)' }}>
+          <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+            <div>
+              <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Zap size={18} color="#ec7211" />
+                Guided Remediation
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
+                Review, accept and track recommended manual remediation actions
+              </div>
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
-              Review, accept and track recommended manual remediation actions
+            {activeAccount?.is_demo && (
+              <button
+                className="btn btn-sm"
+                onClick={handleFastForward}
+                disabled={fastForwarding}
+                style={{
+                  background: 'rgba(234, 179, 8, 0.15)',
+                  color: '#eab308',
+                  border: '1px solid rgba(234, 179, 8, 0.3)',
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+              >
+                <Zap size={14} />
+                {fastForwarding ? 'Fast-forwarding...' : 'Fast-forward grace period (demo)'}
+              </button>
+            )}
+          </div>
+
+          {/* Mandatory Guidance Notice */}
+          <div
+            style={{
+              margin: 'var(--s-3) 0',
+              padding: '10px 14px',
+              background: 'rgba(99, 102, 241, 0.08)',
+              border: '1px solid rgba(99, 102, 241, 0.2)',
+              borderRadius: 'var(--radius-sm, 6px)',
+              fontSize: '12px',
+              color: 'var(--text-2)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}
+          >
+            <Info size={16} color="var(--color-primary, #6366f1)" style={{ flexShrink: 0 }} />
+            <span>
+              <strong>Note:</strong> This tool does not change your cloud resources. You perform the action in your cloud console and confirm here.
+            </span>
+          </div>
+
+          {/* Guided Items List */}
+          <div style={{ marginTop: 'var(--s-4)' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 'var(--s-2)', color: 'var(--text-1)' }}>
+              Guided Remediation Items ({Array.isArray(remediation?.escalations) ? remediation.escalations.length : 0})
             </div>
+            {Array.isArray(remediation?.escalations) && remediation.escalations.length > 0 ? (
+              <div className="table-wrap" style={{ border: 'none', borderTop: '1px solid var(--glass-border)', borderRadius: 0 }}>
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Resource / Issue</th>
+                      <th>Recommended Action</th>
+                      <th style={{ textAlign: 'right' }}>Est. Savings</th>
+                      <th>Stage</th>
+                      <th style={{ textAlign: 'center', width: '220px' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(Array.isArray(remediation?.escalations) ? remediation.escalations : []).map((esc = {}, idx) => {
+                      const recId = esc?.recommendation_id
+                      const isHeld = Boolean(esc?.held)
+                      const gState = String(esc?.guided_state || esc?.stage || esc?.status || 'recommended').toLowerCase()
+                      const isBusy = actionLoading === recId
+                      const allowedActions = Array.isArray(esc?.allowed_actions) ? esc.allowed_actions : ['accept', 'decline']
+
+                      return (
+                        <tr key={recId || idx}>
+                          <td className="td-primary">
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                              <span>{esc?.resource_name || 'Resource'}</span>
+                              <span style={{ fontSize: 11, color: 'var(--text-3)' }}>{esc?.issue || 'Optimization opportunity'}</span>
+                            </div>
+                          </td>
+
+                          <td style={{ fontSize: 12, color: 'var(--text-2)' }}>
+                            {esc?.action || 'Recommended Action'}
+                          </td>
+
+                          <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--color-success, #10b981)', fontSize: 12 }}>
+                            {typeof esc?.potential_savings_usd === 'number' && !isNaN(esc.potential_savings_usd)
+                              ? `$${esc.potential_savings_usd.toFixed(2)}/mo`
+                              : '—'}
+                          </td>
+
+                          <td>
+                            {isHeld ? (
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{
+                                  padding: '2px 6px',
+                                  borderRadius: 4,
+                                  background: 'rgba(239, 68, 68, 0.15)',
+                                  color: '#f87171',
+                                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                                  fontSize: 10,
+                                  fontWeight: 700,
+                                }}>
+                                  HELD
+                                </span>
+                                <span style={{ fontSize: 11, color: '#f87171' }}>
+                                  {esc?.held_reason || 'Active anomaly'}
+                                </span>
+                              </div>
+                            ) : gState === 'accepted' ? (
+                              <span className="badge badge-warning" style={{ fontSize: 11 }}>
+                                In progress (manual)
+                              </span>
+                            ) : gState === 'completed' || gState === 'resolved' ? (
+                              <span className="badge badge-success" style={{ fontSize: 11 }}>
+                                Completed (confirmed by user)
+                              </span>
+                            ) : gState === 'declined' ? (
+                              <span className="badge badge-neutral" style={{ fontSize: 11 }}>
+                                Declined
+                              </span>
+                            ) : gState === 'action_due' ? (
+                              <span className="badge badge-danger" style={{ fontSize: 11 }}>
+                                Action Due
+                              </span>
+                            ) : (gState === 'recommended' || gState === 'pending') ? (
+                              <span className="badge badge-info" style={{ fontSize: 11, textTransform: 'capitalize' }}>
+                                {gState} ({typeof esc?.hours_remaining === 'number' ? `${esc.hours_remaining.toFixed(1)}h rem` : `${esc?.hours_remaining ?? 0}h rem`})
+                              </span>
+                            ) : (
+                              <span className="badge badge-neutral" style={{ fontSize: 11, textTransform: 'capitalize' }}>
+                                {gState}
+                              </span>
+                            )}
+                          </td>
+
+                          <td style={{ textAlign: 'center' }}>
+                            {isHeld ? (
+                              <span style={{ fontSize: 11, color: '#f87171' }}>Blocked by critical anomaly</span>
+                            ) : gState === 'accepted' ? (
+                              <button
+                                className="btn btn-sm btn-success"
+                                onClick={() => handleComplete(recId)}
+                                disabled={isBusy}
+                                style={{ fontSize: 11, padding: '3px 12px' }}
+                              >
+                                {isBusy ? 'Saving…' : 'Done'}
+                              </button>
+                            ) : gState === 'completed' || gState === 'resolved' ? (
+                              <span style={{ fontSize: 11, color: 'var(--color-success, #10b981)', fontWeight: 600 }}>
+                                Confirmed Done
+                              </span>
+                            ) : gState === 'declined' ? (
+                              <span style={{ fontSize: 11, color: 'var(--text-3)' }}>
+                                Dismissed
+                              </span>
+                            ) : (
+                              <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+                                {allowedActions.includes('accept') && (
+                                  <button
+                                    className="btn btn-sm btn-primary"
+                                    onClick={() => handleAccept(recId)}
+                                    disabled={isBusy}
+                                    style={{ fontSize: 11, padding: '3px 8px' }}
+                                  >
+                                    {isBusy ? '…' : "Accept - I'll do this manually"}
+                                  </button>
+                                )}
+                                {allowedActions.includes('decline') && (
+                                  <button
+                                    className="btn btn-sm btn-outline"
+                                    onClick={() => handleDecline(recId)}
+                                    disabled={isBusy}
+                                    style={{ fontSize: 11, padding: '3px 8px' }}
+                                  >
+                                    Decline
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div style={{ fontSize: 12, color: 'var(--text-3)', padding: '12px 0' }}>
+                No active guided remediation items for this account.
+              </div>
+            )}
           </div>
-          {activeAccount?.is_demo && (
-            <button
-              className="btn btn-sm"
-              onClick={handleFastForward}
-              disabled={fastForwarding}
-              style={{
-                background: 'rgba(234, 179, 8, 0.15)',
-                color: '#eab308',
-                border: '1px solid rgba(234, 179, 8, 0.3)',
-                fontWeight: 600,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-              }}
-            >
-              <Zap size={14} />
-              {fastForwarding ? 'Fast-forwarding...' : 'Fast-forward grace period (demo)'}
-            </button>
-          )}
-        </div>
 
-        {/* Mandatory Guidance Notice */}
-        <div
-          style={{
-            margin: 'var(--s-3) 0',
-            padding: '10px 14px',
-            background: 'rgba(99, 102, 241, 0.08)',
-            border: '1px solid rgba(99, 102, 241, 0.2)',
-            borderRadius: 'var(--radius-sm, 6px)',
-            fontSize: '12px',
-            color: 'var(--text-2)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-          }}
-        >
-          <Info size={16} color="var(--color-primary, #6366f1)" style={{ flexShrink: 0 }} />
-          <span>
-            <strong>Note:</strong> This tool does not change your cloud resources. You perform the action in your cloud console and confirm here.
-          </span>
-        </div>
-
-        {/* Guided Items List */}
-        <div style={{ marginTop: 'var(--s-4)' }}>
-          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 'var(--s-2)', color: 'var(--text-1)' }}>
-            Guided Remediation Items ({remediation.escalations?.length || 0})
-          </div>
-          {remediation.escalations && remediation.escalations.length > 0 ? (
-            <div className="table-wrap" style={{ border: 'none', borderTop: '1px solid var(--glass-border)', borderRadius: 0 }}>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Resource / Issue</th>
-                    <th>Recommended Action</th>
-                    <th style={{ textAlign: 'right' }}>Est. Savings</th>
-                    <th>Stage</th>
-                    <th style={{ textAlign: 'center', width: '220px' }}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {remediation.escalations.map((esc, idx) => {
-                    const recId = esc.recommendation_id
-                    const isHeld = Boolean(esc.held)
-                    const gState = esc.guided_state || esc.stage || esc.status
-                    const isBusy = actionLoading === recId
-
-                    return (
-                      <tr key={recId || idx}>
-                        <td className="td-primary">
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                            <span>{esc.resource_name || 'Resource'}</span>
-                            <span style={{ fontSize: 11, color: 'var(--text-3)' }}>{esc.issue}</span>
-                          </div>
+          {/* Audit Logs */}
+          <div style={{ marginTop: 'var(--s-5)', borderTop: '1px solid var(--glass-border)', paddingTop: 'var(--s-4)' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 'var(--s-2)', color: 'var(--text-1)' }}>
+              Guided Remediation Audit Logs ({Array.isArray(remediation?.logs) ? remediation.logs.length : 0})
+            </div>
+            {Array.isArray(remediation?.logs) && remediation.logs.length > 0 ? (
+              <div className="table-wrap" style={{ border: 'none', borderTop: '1px solid var(--glass-border)', borderRadius: 0 }}>
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Timestamp</th>
+                      <th>Resource</th>
+                      <th>Action</th>
+                      <th>Status</th>
+                      <th>Actor</th>
+                      <th>Reason / Details</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(Array.isArray(remediation?.logs) ? remediation.logs : []).map((log = {}, idx) => (
+                      <tr key={idx}>
+                        <td style={{ fontSize: 11, color: 'var(--text-3)' }}>
+                          {(() => {
+                            try {
+                              return log?.created_at ? new Date(log.created_at).toLocaleString() : '—'
+                            } catch {
+                              return '—'
+                            }
+                          })()}
                         </td>
-
-                        <td style={{ fontSize: 12, color: 'var(--text-2)' }}>
-                          {esc.action || 'Recommended Action'}
-                        </td>
-
-                        <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--color-success, #10b981)', fontSize: 12 }}>
-                          {esc.potential_savings_usd != null && !isNaN(esc.potential_savings_usd)
-                            ? `$${esc.potential_savings_usd.toFixed(2)}/mo`
-                            : '—'}
-                        </td>
-
+                        <td className="td-primary">{log?.resource_name || 'Resource'}</td>
                         <td>
-                          {isHeld ? (
-                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                              <span style={{
-                                padding: '2px 6px',
-                                borderRadius: 4,
-                                background: 'rgba(239, 68, 68, 0.15)',
-                                color: '#f87171',
-                                border: '1px solid rgba(239, 68, 68, 0.3)',
-                                fontSize: 10,
-                                fontWeight: 700,
-                              }}>
-                                HELD
-                              </span>
-                              <span style={{ fontSize: 11, color: '#f87171' }}>
-                                {esc.held_reason || 'Active anomaly'}
-                              </span>
-                            </div>
-                          ) : gState === 'accepted' ? (
-                            <span className="badge badge-warning" style={{ fontSize: 11 }}>
-                              In progress (manual)
-                            </span>
-                          ) : gState === 'completed' || gState === 'resolved' ? (
-                            <span className="badge badge-success" style={{ fontSize: 11 }}>
-                              Completed (confirmed by user)
-                            </span>
-                          ) : gState === 'declined' ? (
-                            <span className="badge badge-neutral" style={{ fontSize: 11 }}>
-                              Declined
-                            </span>
-                          ) : gState === 'action_due' ? (
-                            <span className="badge badge-danger" style={{ fontSize: 11 }}>
-                              Action Due
-                            </span>
-                          ) : (
-                            <span className="badge badge-info" style={{ fontSize: 11, textTransform: 'capitalize' }}>
-                              {gState} ({esc.hours_remaining ?? 0}h rem)
-                            </span>
-                          )}
+                          <span style={{
+                            padding: '2px 6px',
+                            borderRadius: 4,
+                            fontSize: 10,
+                            fontWeight: 600,
+                            background: 'rgba(99, 102, 241, 0.15)',
+                            color: '#818cf8',
+                            textTransform: 'uppercase',
+                          }}>
+                            {log?.action_type || log?.action || 'Action'}
+                          </span>
                         </td>
-
-                        <td style={{ textAlign: 'center' }}>
-                          {isHeld ? (
-                            <span style={{ fontSize: 11, color: '#f87171' }}>Blocked by critical anomaly</span>
-                          ) : gState === 'accepted' ? (
-                            <button
-                              className="btn btn-sm btn-success"
-                              onClick={() => handleComplete(recId)}
-                              disabled={isBusy}
-                              style={{ fontSize: 11, padding: '3px 12px' }}
-                            >
-                              {isBusy ? 'Saving…' : 'Done'}
-                            </button>
-                          ) : gState === 'completed' || gState === 'resolved' ? (
-                            <span style={{ fontSize: 11, color: 'var(--color-success, #10b981)', fontWeight: 600 }}>
-                              Confirmed Done
-                            </span>
-                          ) : gState === 'declined' ? (
-                            <span style={{ fontSize: 11, color: 'var(--text-3)' }}>
-                              Dismissed
-                            </span>
-                          ) : (
-                            <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
-                              <button
-                                className="btn btn-sm btn-primary"
-                                onClick={() => handleAccept(recId)}
-                                disabled={isBusy}
-                                style={{ fontSize: 11, padding: '3px 8px' }}
-                              >
-                                {isBusy ? '…' : "Accept - I'll do this manually"}
-                              </button>
-                              <button
-                                className="btn btn-sm btn-outline"
-                                onClick={() => handleDecline(recId)}
-                                disabled={isBusy}
-                                style={{ fontSize: 11, padding: '3px 8px' }}
-                              >
-                                Decline
-                              </button>
-                            </div>
-                          )}
+                        <td>
+                          <span style={{
+                            padding: '2px 6px',
+                            borderRadius: 4,
+                            fontSize: 10,
+                            fontWeight: 600,
+                            background: (typeof log?.status === 'string' && log.status.startsWith('guided_'))
+                              ? 'rgba(52, 211, 153, 0.15)'
+                              : (log?.status === 'simulated' ? 'rgba(234, 179, 8, 0.15)' : 'rgba(96, 165, 250, 0.15)'),
+                            color: (typeof log?.status === 'string' && log.status.startsWith('guided_'))
+                              ? '#34d399'
+                              : (log?.status === 'simulated' ? '#eab308' : '#60a5fa'),
+                            textTransform: 'none',
+                          }}>
+                            {log?.status === 'simulated' ? 'simulated (legacy)' : (log?.status || 'recorded')}
+                          </span>
+                        </td>
+                        <td style={{ fontSize: 11, color: 'var(--text-2)' }}>
+                          {log?.actor || 'system'}
+                        </td>
+                        <td style={{ fontSize: 11, color: 'var(--text-3)' }}>
+                          {log?.trigger_reason || log?.after_state || log?.before_state || '—'}
                         </td>
                       </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div style={{ fontSize: 12, color: 'var(--text-3)', padding: '12px 0' }}>
-              No active guided remediation items for this account.
-            </div>
-          )}
-        </div>
-
-        {/* Audit Logs */}
-        <div style={{ marginTop: 'var(--s-5)', borderTop: '1px solid var(--glass-border)', paddingTop: 'var(--s-4)' }}>
-          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 'var(--s-2)', color: 'var(--text-1)' }}>
-            Guided Remediation Audit Logs ({remediation.logs?.length || 0})
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div style={{ fontSize: 12, color: 'var(--text-3)', padding: '12px 0' }}>
+                No remediation audit records logged yet.
+              </div>
+            )}
           </div>
-          {remediation.logs && remediation.logs.length > 0 ? (
-            <div className="table-wrap" style={{ border: 'none', borderTop: '1px solid var(--glass-border)', borderRadius: 0 }}>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Timestamp</th>
-                    <th>Resource</th>
-                    <th>Action</th>
-                    <th>Status</th>
-                    <th>Actor</th>
-                    <th>Reason / Details</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {remediation.logs.map((log, idx) => (
-                    <tr key={idx}>
-                      <td style={{ fontSize: 11, color: 'var(--text-3)' }}>
-                        {log.created_at ? new Date(log.created_at).toLocaleString() : '—'}
-                      </td>
-                      <td className="td-primary">{log.resource_name || 'Resource'}</td>
-                      <td>
-                        <span style={{
-                          padding: '2px 6px',
-                          borderRadius: 4,
-                          fontSize: 10,
-                          fontWeight: 600,
-                          background: 'rgba(99, 102, 241, 0.15)',
-                          color: '#818cf8',
-                          textTransform: 'uppercase',
-                        }}>
-                          {log.action_type || log.action}
-                        </span>
-                      </td>
-                      <td>
-                        <span style={{
-                          padding: '2px 6px',
-                          borderRadius: 4,
-                          fontSize: 10,
-                          fontWeight: 600,
-                          background: log.status?.startsWith('guided_') ? 'rgba(52, 211, 153, 0.15)' : 'rgba(96, 165, 250, 0.15)',
-                          color: log.status?.startsWith('guided_') ? '#34d399' : '#60a5fa',
-                          textTransform: 'none',
-                        }}>
-                          {log.status}
-                        </span>
-                      </td>
-                      <td style={{ fontSize: 11, color: 'var(--text-2)' }}>
-                        {log.actor || 'system'}
-                      </td>
-                      <td style={{ fontSize: 11, color: 'var(--text-3)' }}>
-                        {log.trigger_reason || log.after_state}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div style={{ fontSize: 12, color: 'var(--text-3)', padding: '12px 0' }}>
-              No remediation audit records logged yet.
-            </div>
-          )}
         </div>
-      </div>
+      </SectionErrorBoundary>
 
       {/* Simulation modal */}
       {simulatingId && (
@@ -588,5 +646,13 @@ export default function Recommendations() {
       )}
 
     </div>
+  )
+}
+
+export default function Recommendations() {
+  return (
+    <SectionErrorBoundary>
+      <RecommendationsContent />
+    </SectionErrorBoundary>
   )
 }
