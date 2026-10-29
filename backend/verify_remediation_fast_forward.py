@@ -143,15 +143,13 @@ def verify_fast_forward():
         "processed": data2.get("processed"),
     }, indent=2))
 
-    # Assertions for Test 2
+    # Assertions for Test 2: under Guided Remediation, fast-forward matures escalation to action_due without simulated execution
     target_esc2 = next(e for e in data2["escalations"] if e["recommendation_id"] == str(idle_rec.id))
-    assert target_esc2["status"] == "resolved", f"Expected resolved, got {target_esc2['status']}"
+    assert target_esc2["status"] == "action_due", f"Expected action_due, got {target_esc2['status']}"
     assert target_esc2["held"] is False
-    assert len(data2["logs"]) >= 1, "Expected remediation log created"
-    log2 = data2["logs"][0]
-    assert log2["status"] == "simulated", f"Expected status='simulated', got {log2['status']}"
-    assert log2["action_type"] == "stop"
-    print("PASS Test 2: Escalation resolved and remediation logged with status='simulated'.")
+    assert len(data2["logs"]) == 0, f"Expected 0 simulated logs, got {len(data2['logs'])}"
+    assert "accept" in target_esc2["allowed_actions"]
+    print("PASS Test 2: Fast-forward advanced escalation to 'action_due'; zero simulated logs executed.")
 
     print("\n--- Test 3: Real account ID -> 403 ---")
     real_acc = CloudAccount(

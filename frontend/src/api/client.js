@@ -89,6 +89,9 @@ export const healthAPI = {
 export const remediationAPI = {
   status:      (params = {}) => api.get('/remediation/status', { params }),
   fastForward: (accountId)   => api.post(`/remediation/demo/fast-forward?account_id=${accountId}`),
+  accept:      (recId)       => api.post(`/remediation/guided/${recId}/accept`),
+  decline:     (recId)       => api.post(`/remediation/guided/${recId}/decline`),
+  complete:    (recId)       => api.post(`/remediation/guided/${recId}/complete`),
 }
 
 export const savingsOptimiserAPI = {

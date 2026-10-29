@@ -279,10 +279,10 @@ def run_suite(engine, is_copy_db: bool = False):
                 process_escalations(db)
 
             db.refresh(esc)
-            assert esc.status == "resolved", f"Expected resolved escalation, got {esc.status}"
+            assert esc.status == "action_due", f"Expected action_due escalation, got {esc.status}"
             log = db.query(RemediationLog).filter(RemediationLog.resource_id == idle_rec.resource_id).first()
-            assert log is not None and log.status == "simulated"
-            print(f"  PASS: RemediationLog written with status='simulated', escalation closed.")
+            assert log is None, "Guided remediation must not create simulated execution log"
+            print(f"  PASS: Escalation moved to action_due without automated execution log (guided remediation).")
 
         elif label == "Azure":
             # Assert Azure demo account has ONLY AzureVM

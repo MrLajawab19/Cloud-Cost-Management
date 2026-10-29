@@ -1,11 +1,12 @@
 """
-routes/remediation.py — GET /remediation/status endpoint.
-Returns active escalations and historical remediation logs.
+routes/remediation.py — Guided Remediation API.
+Provides endpoints for reviewing, accepting, declining, and completing guided remediation actions,
+as well as tracking escalation status and audit logs.
 """
 
 import uuid
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
@@ -68,7 +69,6 @@ def get_remediation_status(
     for esc in all_escalations:
         rec = rec_map.get(esc.recommendation_id)
         if not rec:
-            # Try UUID matching directly if string mismatch
             try:
                 esc_u = uuid.UUID(esc.recommendation_id)
                 for r in recs:
@@ -90,18 +90,37 @@ def get_remediation_status(
             else None
         )
 
+        current_stage = esc.status
+        if is_past_due and not held and current_stage in ["pending", "escalated"]:
+            current_stage = "action_due"
+
         hours_rem = round(max(0.0, (esc.due_at - now).total_seconds() / 3600.0), 2)
+
+        # Allowed actions based on guided state
+        if held:
+            allowed_actions = []
+        elif current_stage in ["recommended", "action_due", "pending"]:
+            allowed_actions = ["accept", "decline"]
+        elif current_stage == "accepted":
+            allowed_actions = ["complete"]
+        else:
+            allowed_actions = []
 
         escalations_out.append({
             "recommendation_id": str(rec.id),
+            "resource_id": rec.resource_id,
             "resource_name": rec.resource_name,
             "issue": rec.issue,
-            "stage": esc.status,
-            "status": esc.status,
+            "action": rec.action,
+            "potential_savings_usd": rec.potential_savings_usd,
+            "stage": current_stage,
+            "guided_state": current_stage,
+            "status": current_stage,
             "due_at": esc.due_at.isoformat() if esc.due_at else None,
             "hours_remaining": hours_rem,
             "held": held,
             "held_reason": held_reason,
+            "allowed_actions": allowed_actions,
         })
 
     # Logs
@@ -123,18 +142,187 @@ def get_remediation_status(
     logs_out = []
     for l in logs:
         res_name = res_names.get(l.resource_id, l.resource_id)
+        actor = "system (simulated)"
+        if l.before_state and "Actor: " in l.before_state:
+            actor = l.before_state.split("Actor: ")[1].split(" |")[0].strip()
+        elif l.status.startswith("guided_"):
+            actor = current_user.email
+
         logs_out.append({
             "created_at": l.timestamp.isoformat() if l.timestamp else None,
             "resource_name": res_name,
+            "resource_id": l.resource_id,
             "action_type": l.action_type,
+            "action": l.action_type,
             "status": l.status,
             "trigger_reason": l.trigger_reason,
             "before_state": l.before_state,
+            "after_state": l.after_state,
+            "actor": actor,
         })
 
     return {
         "escalations": escalations_out,
         "logs": logs_out,
+    }
+
+
+def _find_rec_and_esc(
+    recommendation_id: str,
+    current_user: User,
+    db: Session,
+):
+    try:
+        rec_uuid = uuid.UUID(str(recommendation_id))
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Invalid recommendation ID format")
+
+    rec = db.query(Recommendation).filter(Recommendation.id == rec_uuid).first()
+    if not rec:
+        raise HTTPException(status_code=404, detail="Recommendation not found")
+
+    user_acc_ids = get_user_account_ids(db, current_user, rec.account_id)
+    if not user_acc_ids or rec.account_id not in user_acc_ids:
+        raise HTTPException(status_code=403, detail="Access denied to this recommendation")
+
+    rec_fk = format_recommendation_id_fk(rec.id, db)
+    esc = db.query(EscalationState).filter(
+        (EscalationState.recommendation_id == rec_fk) |
+        (EscalationState.recommendation_id == str(rec.id))
+    ).first()
+
+    now = datetime.utcnow()
+    if not esc:
+        esc = EscalationState(
+            id=str(uuid.uuid4()),
+            recommendation_id=rec_fk,
+            status="recommended",
+            due_at=now
+        )
+        db.add(esc)
+        db.flush()
+
+    return rec, esc
+
+
+@router.post("/guided/{recommendation_id}/accept")
+def accept_guided_remediation(
+    recommendation_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    rec, esc = _find_rec_and_esc(recommendation_id, current_user, db)
+
+    valid_states = {"recommended", "action_due", "pending"}
+    if esc.status not in valid_states:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot accept recommendation in state '{esc.status}'. Must be in {sorted(list(valid_states))}."
+        )
+
+    prev_status = esc.status
+    esc.status = "accepted"
+
+    log_entry = RemediationLog(
+        id=str(uuid.uuid4()),
+        account_id=rec.account_id,
+        resource_id=rec.resource_id,
+        action_type=rec.remediation_type or "manual",
+        status="guided_accepted",
+        before_state=f"Actor: {current_user.email} | State: {prev_status}",
+        after_state="In progress (manual)",
+        trigger_reason=f"User {current_user.email} accepted manual {rec.action}",
+        timestamp=datetime.utcnow()
+    )
+    db.add(log_entry)
+    db.commit()
+
+    return {
+        "status": "success",
+        "guided_state": "accepted",
+        "recommendation_id": str(rec.id),
+        "message": "Guided remediation accepted. User will perform action manually."
+    }
+
+
+@router.post("/guided/{recommendation_id}/decline")
+def decline_guided_remediation(
+    recommendation_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    rec, esc = _find_rec_and_esc(recommendation_id, current_user, db)
+
+    valid_states = {"recommended", "action_due", "pending"}
+    if esc.status not in valid_states:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot decline recommendation in state '{esc.status}'. Must be in {sorted(list(valid_states))}."
+        )
+
+    prev_status = esc.status
+    esc.status = "declined"
+    rec.ignore_remediation = True
+
+    log_entry = RemediationLog(
+        id=str(uuid.uuid4()),
+        account_id=rec.account_id,
+        resource_id=rec.resource_id,
+        action_type=rec.remediation_type or "manual",
+        status="guided_declined",
+        before_state=f"Actor: {current_user.email} | State: {prev_status}",
+        after_state="Declined by user",
+        trigger_reason=f"User {current_user.email} declined {rec.action}",
+        timestamp=datetime.utcnow()
+    )
+    db.add(log_entry)
+    db.commit()
+
+    return {
+        "status": "success",
+        "guided_state": "declined",
+        "recommendation_id": str(rec.id),
+        "message": "Guided remediation declined and dismissed."
+    }
+
+
+@router.post("/guided/{recommendation_id}/complete")
+def complete_guided_remediation(
+    recommendation_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    rec, esc = _find_rec_and_esc(recommendation_id, current_user, db)
+
+    if esc.status != "accepted":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot complete recommendation in state '{esc.status}'. Must be in 'accepted' state first."
+        )
+
+    esc.status = "completed"
+    rec.is_resolved = True
+    rec.resolved_at = datetime.utcnow()
+
+    log_entry = RemediationLog(
+        id=str(uuid.uuid4()),
+        account_id=rec.account_id,
+        resource_id=rec.resource_id,
+        action_type=rec.remediation_type or "manual",
+        status="guided_completed",
+        before_state=f"Actor: {current_user.email} | State: accepted",
+        after_state="Completed (confirmed by user)",
+        trigger_reason=f"User {current_user.email} completed {rec.action}",
+        timestamp=datetime.utcnow()
+    )
+    db.add(log_entry)
+    db.commit()
+
+    return {
+        "status": "success",
+        "guided_state": "completed",
+        "recommendation_id": str(rec.id),
+        "message": "Guided remediation completed and recommendation resolved."
     }
 
 
@@ -147,6 +335,7 @@ def demo_fast_forward(
     """
     Fast-forward pending escalations on a UUID5 demo account to mature immediately.
     Allowed only for UUID5 demo accounts with no credentials.
+    Yields stage 'action_due' or HELD; never completes anything.
     """
     acc = db.query(CloudAccount).filter(CloudAccount.id == account_id).first()
     if not acc:
@@ -207,10 +396,10 @@ def demo_fast_forward(
 
     db.commit()
 
-    # Call the real escalation-processing function once
+    # Run the real escalation-processing function (yields action_due or HELD)
     process_escalations(db)
 
-    # Return the same JSON shape as GET /remediation/status plus a "processed" summary
+    # Return the status shape plus processed summary
     status_response = get_remediation_status(account_id=acc.id, current_user=current_user, db=db)
     status_response["processed"] = {
         "account_id": acc.id,

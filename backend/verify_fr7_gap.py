@@ -100,14 +100,14 @@ def main():
     # Verify execution
     db.refresh(esc_due)
     db.refresh(due_rec)
-    if esc_due.status == "resolved" and due_rec.is_resolved:
+    if esc_due.status == "action_due" and not due_rec.is_resolved:
         log = db.query(RemediationLog).filter_by(resource_id=res_id).first()
-        if log:
-            print(f"  SUCCESS: Escalation executed and logged correctly. Status: {log.status}")
+        if log is None:
+            print("  SUCCESS: Escalation transitioned to action_due without automated execution log (guided remediation).")
         else:
-            print("  FAILURE: Escalation resolved but no RemediationLog written.")
+            print(f"  FAILURE: RemediationLog written prematurely: {log.status}")
     else:
-        print("  FAILURE: Escalation did not execute.")
+        print(f"  FAILURE: Escalation did not transition to action_due (status: {esc_due.status})")
 
     print("\n--- 3. Testing Escalation Abort (Anomaly Exists) ---")
     # This test inserts an Anomaly using the EXACT same field names as anomaly_detector.py's

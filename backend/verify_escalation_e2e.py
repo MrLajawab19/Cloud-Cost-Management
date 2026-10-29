@@ -141,16 +141,14 @@ def main():
     db.refresh(esc)
     db.refresh(rec)
     print(f"EscalationState after processing: Status={esc.status}")
-    assert esc.status == "resolved", f"Expected EscalationState status 'resolved', got {esc.status}"
-    assert rec.is_resolved is True, f"Expected Recommendation is_resolved True, got {rec.is_resolved}"
+    # Under Guided Remediation: past grace period transitions to action_due without simulated execution
+    assert esc.status == "action_due", f"Expected EscalationState status 'action_due', got {esc.status}"
+    assert rec.is_resolved is False, f"Expected Recommendation is_resolved False, got {rec.is_resolved}"
 
-    # Check RemediationLog
+    # Check RemediationLog: zero simulated logs executed
     logs = db.query(RemediationLog).all()
     print(f"RemediationLog rows found: {len(logs)}")
-    for l in logs:
-        print(f"  RemediationLog: ID={l.id} Resource={l.resource_id} Action={l.action_type} Status='{l.status}' Reason='{l.trigger_reason}'")
-    assert len(logs) == 1, f"Expected 1 RemediationLog, got {len(logs)}"
-    assert logs[0].status == "simulated", f"Expected status 'simulated', got {logs[0].status}"
+    assert len(logs) == 0, f"Expected 0 RemediationLog executed, got {len(logs)}"
 
     print("\n--- Part 2: Underutilized EC2 (Resize Remediation) ---")
     resize_res = Resource(

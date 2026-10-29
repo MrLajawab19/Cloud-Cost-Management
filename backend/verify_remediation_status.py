@@ -5,7 +5,7 @@ Verification script for Item N:
 - TestClient calling GET /remediation/status and GET /recommendations.
 - Demo AWS account shows pending escalation.
 - After advancing time with unresolved spike anomaly -> held: true with reason.
-- After resolving anomaly -> process_escalations writes log 'simulated'.
+- After resolving anomaly -> process_escalations transitions to stage 'action_due', guided flow accept/complete logs guided_* status.
 - DELETE /accounts/{id} on real account with logs/escalation -> 200; demo account -> 403.
 """
 
@@ -185,20 +185,35 @@ def run_tests():
     anom.is_resolved = True
     db.commit()
 
-    # Process escalations after anomaly resolved -> executes stop remediation and creates log
+    # Process escalations after anomaly resolved -> transitions to stage 'action_due' (no simulated execution)
     process_escalations(db)
     db.refresh(esc_db)
-    assert esc_db.status == "resolved"
+    assert esc_db.status == "action_due"
 
     status_res3 = client.get(f"/remediation/status?account_id={demo_acc.id}", headers=headers)
     assert status_res3.status_code == 200
     status_data3 = status_res3.json()
-    print("Status response after resolving anomaly and execution:")
+    print("Status response after resolving anomaly (transitioned to action_due):")
     print(json.dumps(status_data3, indent=2))
-    assert len(status_data3["logs"]) >= 1
-    log_item = status_data3["logs"][0]
-    assert log_item["status"] == "simulated"
-    assert log_item["action_type"] == "stop"
+    assert status_data3["escalations"][0]["stage"] == "action_due"
+    assert status_data3["escalations"][0]["guided_state"] == "action_due"
+    assert "accept" in status_data3["escalations"][0]["allowed_actions"]
+    # No automated simulated logs are created
+    assert len(status_data3["logs"]) == 0
+
+    # Test guided accept & complete flow
+    acc_res = client.post(f"/remediation/guided/{rec.id}/accept", headers=headers)
+    assert acc_res.status_code == 200, f"Expected 200 on accept, got {acc_res.status_code}: {acc_res.text}"
+
+    comp_res = client.post(f"/remediation/guided/{rec.id}/complete", headers=headers)
+    assert comp_res.status_code == 200, f"Expected 200 on complete, got {comp_res.status_code}: {comp_res.text}"
+
+    status_res4 = client.get(f"/remediation/status?account_id={demo_acc.id}", headers=headers)
+    assert status_res4.status_code == 200
+    status_data4 = status_res4.json()
+    assert len(status_data4["logs"]) == 2
+    assert status_data4["logs"][0]["status"] in ["guided_accepted", "guided_completed"]
+    assert "test_rem@example.com" in status_data4["logs"][0]["actor"]
 
     # Test DELETE /accounts/{id} on real account and demo account
     # Demo account delete -> 403
