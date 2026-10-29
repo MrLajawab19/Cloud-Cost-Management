@@ -87,11 +87,23 @@ def compute_savings_plans(db: Session, account: CloudAccount) -> Dict[str, Any]:
     """
     provider = account.provider.lower()
 
-
     if provider == "azure":
-        eligible_services = ["AzureVM"]
+        base_eligible = ["AzureVM"]
     else:
-        eligible_services = ["EC2", "RDS"]
+        base_eligible = ["EC2", "RDS"]
+
+    # Detect any injected services tagged source='demo_injected'
+    injected_services = [
+        r[0] for r in db.query(CostRecord.service_type)
+        .filter(CostRecord.account_id == account.id, CostRecord.source == "demo_injected")
+        .distinct()
+        .all()
+    ]
+
+    eligible_services = list(base_eligible)
+    for srv in injected_services:
+        if srv not in eligible_services:
+            eligible_services.append(srv)
 
     # 1. Existing commitment recommendations in DB
     existing_recs = db.query(Recommendation).filter(
@@ -140,6 +152,43 @@ def compute_savings_plans(db: Session, account: CloudAccount) -> Dict[str, Any]:
         ).first() is not None
 
         if not has_history and srv not in forecast_map and srv not in existing_map:
+            continue
+
+        has_injected = db.query(CostRecord).filter(
+            CostRecord.account_id == account.id,
+            CostRecord.service_type == srv,
+            CostRecord.source == "demo_injected"
+        ).first() is not None
+        is_new = bool(has_injected)
+
+        # Services with no commitment product (e.g. S3, Lambda)
+        if srv not in base_eligible:
+            if srv in forecast_map:
+                baseline_monthly = round(forecast_map[srv], 2)
+            else:
+                recent_recs = db.query(CostRecord.daily_cost_usd).filter(
+                    CostRecord.account_id == account.id,
+                    CostRecord.service_type == srv
+                ).order_by(CostRecord.record_date.desc()).limit(30).all()
+                if recent_recs:
+                    avg_daily = sum(r[0] for r in recent_recs) / len(recent_recs)
+                    baseline_monthly = round(avg_daily * 30.0, 2)
+                else:
+                    baseline_monthly = 0.0
+
+            services_output.append({
+                "service": srv,
+                "baseline_monthly": baseline_monthly,
+                "options": {},
+                "options_list": [],
+                "recommended": "No commitment option for this service",
+                "reason": "No commitment option for this service",
+                "cash_note": "No upfront cash required",
+                "right_size_first_note": None,
+                "is_new": is_new,
+                "has_commitment_option": False,
+                "existing_recommendation": None
+            })
             continue
 
         existing_rec = existing_map.get(srv)
@@ -302,6 +351,8 @@ def compute_savings_plans(db: Session, account: CloudAccount) -> Dict[str, Any]:
             "reason": reason,
             "cash_note": cash_note,
             "right_size_first_note": right_size_first_note,
+            "is_new": is_new,
+            "has_commitment_option": True,
             "existing_recommendation": {
                 "monthly_saving": existing_rec.potential_savings_usd,
                 "upfront_cost": existing_rec.upfront_cost_usd,

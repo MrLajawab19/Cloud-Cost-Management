@@ -14,6 +14,7 @@ const SCENARIOS = [
   { id: 'cost_drop',             name: 'Cost Drop',             desc: 'Substantial downward drop in daily spend.' },
   { id: 'new_idle_resource',     name: 'New Idle Resource',     desc: 'Adds an unutilized instance (0.3-0.4% CPU, 250-300h) triggering stop rec.' },
   { id: 'new_oversized_resource',name: 'New Oversized Resource',desc: 'Adds an underutilized instance (~3% CPU) triggering resize recommendation.' },
+  { id: 'new_service',           name: 'New Service',           desc: 'Adds a service with >= 14 days history to evaluate commitment options.' },
 ]
 
 export default function LiveDataLab() {
@@ -27,6 +28,7 @@ export default function LiveDataLab() {
   const [service,        setService]        = useState(isAws ? 'EC2' : 'AzureVM')
   const [magnitude,      setMagnitude]      = useState(80)
   const [days,           setDays]           = useState(5)
+  const [monthlyCost,    setMonthlyCost]    = useState(120)
   const [loading,        setLoading]        = useState(false)
   const [resetting,      setResetting]      = useState(false)
   const [result,         setResult]         = useState(null)
@@ -86,8 +88,9 @@ export default function LiveDataLab() {
       const payload = {
         scenario,
         service: (scenario === 'new_idle_resource' || scenario === 'new_oversized_resource') ? undefined : service,
-        magnitude: (scenario === 'normal_day' || scenario === 'new_idle_resource' || scenario === 'new_oversized_resource') ? undefined : Number(magnitude),
+        magnitude: (scenario === 'normal_day' || scenario === 'new_idle_resource' || scenario === 'new_oversized_resource' || scenario === 'new_service') ? undefined : Number(magnitude),
         days: scenario === 'sustained_drift' ? Number(days) : undefined,
+        monthly_cost: scenario === 'new_service' ? Number(monthlyCost) : undefined,
       }
       const res = await demoAPI.inject(payload, { account_id: activeAccount.id })
       setResult(res.data)
@@ -243,7 +246,7 @@ export default function LiveDataLab() {
         {/* Scenario Parameters */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--s-4)', alignItems: 'center', background: 'rgba(255, 255, 255, 0.02)', padding: '14px 18px', borderRadius: 'var(--radius-md, 8px)', border: '1px solid var(--border-subtle, rgba(255, 255, 255, 0.05))', marginBottom: 'var(--s-4)' }}>
           {/* Service Selector */}
-          {(scenario === 'cost_spike' || scenario === 'sustained_drift' || scenario === 'cost_drop') && (
+          {(scenario === 'cost_spike' || scenario === 'sustained_drift' || scenario === 'cost_drop' || scenario === 'new_service') && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-2)' }}>Target Service</label>
               <select
@@ -263,6 +266,23 @@ export default function LiveDataLab() {
                   <option value="AzureVM">Azure Virtual Machines</option>
                 )}
               </select>
+            </div>
+          )}
+
+          {/* Monthly Cost for new_service */}
+          {scenario === 'new_service' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: '160px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-2)' }}>Monthly Spend ($)</label>
+              <input
+                type="number"
+                min={10}
+                max={5000}
+                step={10}
+                value={monthlyCost}
+                onChange={e => setMonthlyCost(Number(e.target.value))}
+                className="select-input"
+                style={{ width: '130px' }}
+              />
             </div>
           )}
 
@@ -470,18 +490,19 @@ export default function LiveDataLab() {
                 {after?.savings_optimiser?.map((svc, i) => {
                   const bSvc = before?.savings_optimiser?.find(b => b.service === svc.service)
                   const hasChanged = bSvc && bSvc.recommended !== svc.recommended
+                  const isNewPlan = !bSvc || Boolean(svc.is_new)
                   return (
                     <div
                       key={i}
                       style={{
                         padding: '6px 8px',
                         borderRadius: '4px',
-                        background: hasChanged ? 'rgba(245, 158, 11, 0.15)' : 'rgba(255, 255, 255, 0.02)',
-                        border: hasChanged ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid var(--border-subtle, rgba(255, 255, 255, 0.05))'
+                        background: isNewPlan ? 'rgba(16, 185, 129, 0.12)' : hasChanged ? 'rgba(245, 158, 11, 0.15)' : 'rgba(255, 255, 255, 0.02)',
+                        border: isNewPlan ? '1px solid rgba(16, 185, 129, 0.3)' : hasChanged ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid var(--border-subtle, rgba(255, 255, 255, 0.05))'
                       }}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 600 }}>
-                        <span>{svc.service}:</span>
+                        <span>{isNewPlan ? `New plan available: ${svc.service}` : `${svc.service}:`}</span>
                         <span style={{ color: svc.recommended === 'pay_as_you_go' ? 'var(--color-warning, #f59e0b)' : 'var(--color-success, #10b981)' }}>
                           {svc.recommended}
                         </span>

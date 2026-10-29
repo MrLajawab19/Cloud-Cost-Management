@@ -87,6 +87,7 @@ export default function SavingsOptimiser() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--s-4)' }}>
           {services.map(svc => {
             const options = svc.options_list || []
+            const isNoCommitment = svc.recommended === 'No commitment option for this service' || svc.has_commitment_option === false
             const isPaygRecommended = svc.recommended === 'pay_as_you_go'
 
             return (
@@ -98,6 +99,11 @@ export default function SavingsOptimiser() {
                       <span className={`chip chip-${svc.service.toLowerCase()}`} style={{ fontSize: '12px', padding: '4px 10px' }}>
                         {svc.service}
                       </span>
+                      {svc.is_new && (
+                        <span className="badge badge-info" style={{ fontSize: '11px', padding: '2px 8px' }}>
+                          New
+                        </span>
+                      )}
                       <h2 style={{ fontSize: '18px', fontWeight: 700, margin: 0, color: 'var(--text-1)' }}>
                         {svc.service === 'AzureVM' ? 'Azure Virtual Machines' : `${svc.service} Compute`}
                       </h2>
@@ -113,7 +119,7 @@ export default function SavingsOptimiser() {
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--s-2)' }}>
-                    <span className={`badge ${isPaygRecommended ? 'badge-warning' : 'badge-success'}`} style={{ padding: '4px 10px', fontSize: '12px' }}>
+                    <span className={`badge ${isNoCommitment ? 'badge-neutral' : isPaygRecommended ? 'badge-warning' : 'badge-success'}`} style={{ padding: '4px 10px', fontSize: '12px' }}>
                       Recommended: {svc.options?.[svc.recommended]?.name || svc.recommended}
                     </span>
                   </div>
@@ -166,6 +172,21 @@ export default function SavingsOptimiser() {
                 </div>
 
                 {/* Options Table */}
+                {options.length === 0 ? (
+                  <div
+                    style={{
+                      padding: '24px 20px',
+                      textAlign: 'center',
+                      color: 'var(--text-3)',
+                      fontSize: '13px',
+                      background: 'rgba(255, 255, 255, 0.02)',
+                      borderRadius: 'var(--radius-sm, 6px)',
+                      border: '1px solid var(--border-subtle, rgba(255, 255, 255, 0.05))'
+                    }}
+                  >
+                    No commitment option for this service
+                  </div>
+                ) : (
                 <div className="table-wrap">
                   <table className="data-table" style={{ fontSize: '13px' }}>
                     <thead>
@@ -261,6 +282,7 @@ export default function SavingsOptimiser() {
                     </tbody>
                   </table>
                 </div>
+                )}
               </div>
             )
           })}

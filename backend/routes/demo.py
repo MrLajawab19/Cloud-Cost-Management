@@ -44,10 +44,11 @@ router = APIRouter(prefix="/demo", tags=["Live Data Lab"])
 
 
 class InjectRequest(BaseModel):
-    scenario: str = Field(..., description="normal_day | cost_spike | sustained_drift | cost_drop | new_idle_resource | new_oversized_resource")
+    scenario: str = Field(..., description="normal_day | cost_spike | sustained_drift | cost_drop | new_idle_resource | new_oversized_resource | new_service")
     service: Optional[str] = None
     magnitude: Optional[float] = None
     days: Optional[int] = None
+    monthly_cost: Optional[float] = None
 
 
 def _validate_uuid5_demo_account(db: Session, current_user: User, account_id: str) -> CloudAccount:
@@ -151,7 +152,8 @@ def _capture_state(db: Session, account: CloudAccount) -> Dict[str, Any]:
             {
                 "service": s["service"],
                 "recommended": s["recommended"],
-                "reason": s["reason"]
+                "reason": s["reason"],
+                "is_new": s.get("is_new", False)
             }
             for s in plans.get("services", [])
         ]
@@ -423,6 +425,101 @@ def inject_demo_scenario(
                 launch_time=now_dt - timedelta(days=15)
             )
             db.add(r)
+
+    elif scenario == "new_service":
+        target_service = payload.service or ("EC2" if provider == "aws" else "AzureVM")
+        if provider == "aws":
+            valid_services = {"EC2", "RDS", "Lambda", "S3"}
+            if target_service not in valid_services:
+                raise HTTPException(status_code=400, detail=f"Service '{target_service}' is not valid for AWS demo account")
+        else:
+            valid_services = {"AzureVM"}
+            if target_service not in valid_services:
+                raise HTTPException(status_code=400, detail=f"Service '{target_service}' is not valid for Azure demo account")
+
+        m_cost = float(payload.monthly_cost if payload.monthly_cost is not None else 120.0)
+        daily_c = round(m_cost / 30.0, 4)
+        now_dt = datetime.now(timezone.utc)
+        res_uid = uuid.uuid4()
+
+        if target_service == "EC2":
+            res_id = f"i-demo-injected-svc-{res_uid.hex[:8]}"
+            r_name = "injected-ec2-service"
+            r_type = "t3.medium"
+            r_status = "running"
+            cpu_avg = 15.0
+            rt_hours = 360.0
+        elif target_service == "RDS":
+            res_id = f"rds-demo-injected-svc-{res_uid.hex[:8]}"
+            r_name = "injected-rds-service"
+            r_type = "db.t3.medium"
+            r_status = "available"
+            cpu_avg = 12.0
+            rt_hours = 360.0
+        elif target_service == "Lambda":
+            res_id = f"lambda-demo-injected-svc-{res_uid.hex[:8]}"
+            r_name = "injected-lambda-service"
+            r_type = "Serverless Function"
+            r_status = "active"
+            cpu_avg = None
+            rt_hours = 0.0
+        elif target_service == "S3":
+            res_id = f"s3-demo-injected-svc-{res_uid.hex[:8]}"
+            r_name = "injected-s3-service"
+            r_type = "S3 Bucket"
+            r_status = "available"
+            cpu_avg = None
+            rt_hours = 0.0
+        elif target_service == "AzureVM":
+            res_id = f"/subscriptions/demo/resourceGroups/injected/providers/Microsoft.Compute/virtualMachines/injected-vm-{res_uid.hex[:8]}"
+            r_name = "injected-azurevm-service"
+            r_type = "Standard_B2s"
+            r_status = "running"
+            cpu_avg = 15.0
+            rt_hours = 360.0
+        else:
+            res_id = f"demo-injected-{target_service.lower()}-{res_uid.hex[:8]}"
+            r_name = f"injected-{target_service.lower()}-service"
+            r_type = "Standard"
+            r_status = "running"
+            cpu_avg = None
+            rt_hours = 360.0
+
+        r = Resource(
+            id=res_uid,
+            account_id=acc.id,
+            resource_id=res_id,
+            resource_name=r_name,
+            service_type=target_service,
+            region=acc.region or ("us-east-1" if provider == "aws" else "eastus"),
+            status=r_status,
+            resource_type=r_type,
+            cpu_utilization_avg=cpu_avg,
+            runtime_hours=rt_hours,
+            estimated_monthly_cost=m_cost,
+            is_idle=False,
+            last_seen=now_dt,
+            launch_time=now_dt - timedelta(days=20)
+        )
+        db.add(r)
+
+        # Backfill 15 days (>= 14 days) seeded cost history tagged source='demo_injected'
+        today = date.today()
+        for offset in range(14, -1, -1):
+            d = today - timedelta(days=offset)
+            v_factor = 1.0 + 0.01 * ((offset % 5) - 2)
+            c_usd = round(daily_c * v_factor, 4)
+            cr = CostRecord(
+                account_id=acc.id,
+                resource_id=res_id,
+                service_type=target_service,
+                region=acc.region or ("us-east-1" if provider == "aws" else "eastus"),
+                record_date=d,
+                daily_cost_usd=c_usd,
+                monthly_estimate=round(c_usd * 30.0, 4),
+                source="demo_injected"
+            )
+            db.add(cr)
     else:
         raise HTTPException(status_code=400, detail=f"Unknown scenario '{payload.scenario}'")
 
@@ -464,6 +561,16 @@ def inject_demo_scenario(
     before_esc_ids = {e["id"] for e in before["escalations"]}
     escs_created = [e for e in after["escalations"] if e["id"] not in before_esc_ids]
 
+    new_plans_available = [
+        {
+            "service": s["service"],
+            "recommended": s["recommended"],
+            "reason": s["reason"]
+        }
+        for s in after["savings_optimiser"]
+        if s["service"] not in before_opt_map
+    ]
+
     delta = {
         "anomaly_count": after["anomaly_count"] - before["anomaly_count"],
         "new_anomalies": new_anomalies,
@@ -472,6 +579,7 @@ def inject_demo_scenario(
         "recommendations_added": recs_added,
         "recommendations_removed": recs_removed,
         "savings_optimiser_changes": opt_changes,
+        "new_plans_available": new_plans_available,
         "escalations_created": escs_created,
     }
 
