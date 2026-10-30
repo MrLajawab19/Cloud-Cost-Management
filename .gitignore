@@ -1,3 +1,6 @@
+# ─── Temporary & Quarantine ──────────────────────────────────────
+_quarantine/
+
 # ─── Environment & Secrets ──────────────────────────────────────
 .env
 *.env
