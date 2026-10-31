@@ -7,7 +7,7 @@ const features = [
   { icon: AlertTriangle, title: 'Anomaly Detection', desc: 'Real-time spike alerts' },
   { icon: Lightbulb, title: 'Optimization', desc: 'Intelligent rightsizing' },
   { icon: FlaskConical, title: 'Simulation Engine', desc: 'What-if financial modeling' },
-  { icon: Zap, title: 'Automation', desc: 'One-click resource remediation' },
+  { icon: Zap, title: 'Guided Actions', desc: 'Step-by-step remediation guidance' },
 ]
 
 const mockTrendData = [
@@ -60,9 +60,10 @@ export default function DashboardShowcase() {
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.8 }}
-            className="w-full lg:w-[65%] h-[500px] rounded-2xl bg-white dark:bg-[#0B1220] border border-slate-200 dark:border-white/10 shadow-2xl overflow-hidden flex flex-col"
+            className="w-full lg:w-[65%] flex flex-col"
           >
-            {/* Mock Header */}
+            <div className="w-full h-[500px] rounded-2xl bg-white dark:bg-[#0B1220] border border-slate-200 dark:border-white/10 shadow-2xl overflow-hidden flex flex-col">
+              {/* Mock Header */}
             <div className="h-12 border-b border-slate-100 dark:border-white/5 flex items-center px-4 gap-4 justify-between">
               <div className="flex gap-1.5 items-center">
                 <div className="w-3 h-3 rounded-full bg-red-400/80" />
@@ -166,7 +167,11 @@ export default function DashboardShowcase() {
                 </div>
               </div>
             </div>
-          </motion.div>
+          </div>
+          <p className="mt-3 text-center text-xs text-slate-500 dark:text-slate-400">
+            Illustrative preview with sample numbers.
+          </p>
+        </motion.div>
 
           {/* Features Right (35%) */}
           <motion.div 

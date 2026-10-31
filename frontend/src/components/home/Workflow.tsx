@@ -7,7 +7,7 @@ const steps = [
   { num: '04', title: 'Detect', desc: 'Find anomalies' },
   { num: '05', title: 'Recommend', desc: 'Discover savings' },
   { num: '06', title: 'Simulate', desc: 'Evaluate impact' },
-  { num: '07', title: 'Automate', desc: 'Execute actions' },
+  { num: '07', title: 'Act', desc: 'Follow guided steps' },
 ]
 
 export default function Workflow() {
@@ -25,7 +25,7 @@ export default function Workflow() {
             How It Works
           </h2>
           <p className="text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
-            From data collection to automated savings.
+            From data collection to guided savings.
           </p>
         </motion.div>
 

@@ -5,7 +5,7 @@ const features = [
   {
     icon: BarChart3,
     title: 'Forecast Spending',
-    description: 'Accurately predict future cloud costs based on historical usage patterns and seasonality.',
+    description: 'Predict future cloud costs from historical usage patterns.',
     color: 'text-blue-500',
     bg: 'bg-blue-500/10'
   },
@@ -33,14 +33,14 @@ const features = [
   {
     icon: Lightbulb,
     title: 'Optimize Savings Plans',
-    description: 'Automatically calculate the exact break-even horizon for commitment purchases.',
+    description: 'Estimate the break-even horizon for commitment purchases.',
     color: 'text-amber-500',
     bg: 'bg-amber-500/10'
   },
   {
     icon: Zap,
-    title: 'Automated Remediation',
-    description: 'Automatically stop idle instances or apply changes directly from the dashboard.',
+    title: 'Guided Remediation',
+    description: 'Get step-by-step guidance to stop, resize or delete idle resources, then track each action in an audit log.',
     color: 'text-orange-500',
     bg: 'bg-orange-500/10'
   }
