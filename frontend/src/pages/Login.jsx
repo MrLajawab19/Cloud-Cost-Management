@@ -25,7 +25,7 @@ export default function Login() {
     <div className="auth-container">
       <div className="auth-card">
         <h2>Welcome Back</h2>
-        <p>Log in to manage your AWS costs</p>
+        <p>Log in to manage your cloud costs</p>
         {error && <div className="auth-error">{error}</div>}
         <form onSubmit={handleSubmit} className="auth-form">
           <div className="form-group">

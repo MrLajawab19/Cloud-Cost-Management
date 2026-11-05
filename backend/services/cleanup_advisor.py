@@ -81,25 +81,26 @@ def generate_recommendations(db: Session) -> int:
 
         # -- S3 Rules ---------------------------------------------
         elif r.service_type == "S3":
-            if (r.storage_size_gb or 0) < 0.001 and (r.request_count or 0) == 0:
-                _upsert_rec(db, current_cycle_keys, r, 
-                    issue="Empty S3 Bucket",
-                    desc=f"Bucket '{r.resource_name}' contains no objects and 0 requests.",
-                    action="Delete the bucket.",
-                    remediation_type="manual",
-                    severity="low",
-                    savings=0.0)
-
-            elif (r.storage_size_gb or 0) > 500 and (r.request_count or 0) == 0:
-                if r.estimated_monthly_cost is not None:
-                    cost = r.estimated_monthly_cost
+            if r.storage_size_gb is not None and r.request_count is not None:
+                if r.storage_size_gb < 0.001 and r.request_count == 0:
                     _upsert_rec(db, current_cycle_keys, r, 
-                        issue="Large Unused S3 Bucket",
-                        desc=f"Bucket '{r.resource_name}' holds {r.storage_size_gb:.1f} GB with zero requests.",
-                        action="Move to Glacier or delete.",
+                        issue="Empty S3 Bucket",
+                        desc=f"Bucket '{r.resource_name}' contains no objects and 0 requests.",
+                        action="Delete the bucket.",
                         remediation_type="manual",
-                        severity=_severity(cost),
-                        savings=round(cost * 0.9, 2))
+                        severity="low",
+                        savings=0.0)
+
+                elif r.storage_size_gb > 500 and r.request_count == 0:
+                    if r.estimated_monthly_cost is not None:
+                        cost = r.estimated_monthly_cost
+                        _upsert_rec(db, current_cycle_keys, r, 
+                            issue="Large Unused S3 Bucket",
+                            desc=f"Bucket '{r.resource_name}' holds {r.storage_size_gb:.1f} GB with zero requests.",
+                            action="Move to Glacier or delete.",
+                            remediation_type="manual",
+                            severity=_severity(cost),
+                            savings=round(cost * 0.9, 2))
 
         # -- RDS Rules --------------------------------------------
         elif r.service_type == "RDS":

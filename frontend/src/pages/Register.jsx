@@ -25,7 +25,7 @@ export default function Register() {
     <div className="auth-container">
       <div className="auth-card">
         <h2>Create an Account</h2>
-        <p>Start tracking your AWS costs today</p>
+        <p>Start tracking your cloud costs today</p>
         {error && <div className="auth-error">{error}</div>}
         <form onSubmit={handleSubmit} className="auth-form">
           <div className="form-group">

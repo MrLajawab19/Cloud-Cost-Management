@@ -155,8 +155,15 @@ def collect_s3_buckets(session) -> List[Dict[str, Any]]:
 
     try:
         buckets = s3.list_buckets().get("Buckets", [])
-        for bucket in buckets:
-            name          = bucket["Name"]
+    except Exception as e:
+        logger.error(f"S3 collection failed: {e}")
+        raise
+
+    for bucket in buckets:
+        name = bucket.get("Name")
+        if not name:
+            continue
+        try:
             creation_date = bucket.get("CreationDate")
 
             # Try to get bucket region
@@ -167,22 +174,25 @@ def collect_s3_buckets(session) -> List[Dict[str, Any]]:
                 region = session.region_name
 
             # Storage size (CloudWatch BucketSizeBytes, daily metric)
-            size_gb = _get_cloudwatch_metric(
+            raw_size = _get_cloudwatch_metric(
                 cw, "AWS/S3", "BucketSizeBytes",
                 [{"Name": "BucketName", "Value": name},
                  {"Name": "StorageType", "Value": "StandardStorage"}],
                 days=1,
-            ) / (1024 ** 3)  # bytes → GB
+            )
+            size_gb = round(raw_size / (1024 ** 3), 4) if raw_size is not None else None
 
             # Number of objects
-            obj_count = _get_cloudwatch_metric(
+            raw_objs = _get_cloudwatch_metric(
                 cw, "AWS/S3", "NumberOfObjects",
                 [{"Name": "BucketName", "Value": name},
                  {"Name": "StorageType", "Value": "AllStorageTypes"}],
                 days=1,
             )
+            obj_count = float(raw_objs) if raw_objs is not None else None
 
-            monthly_cost = round(size_gb * S3_PRICE_PER_GB, 4)
+            monthly_cost = round(size_gb * S3_PRICE_PER_GB, 4) if size_gb is not None else None
+            is_idle = (size_gb < 0.001 and obj_count == 0) if (size_gb is not None and obj_count is not None) else False
 
             resources.append({
                 "resource_id":   name,
@@ -192,15 +202,15 @@ def collect_s3_buckets(session) -> List[Dict[str, Any]]:
                 "status":        "available",
                 "resource_type": "S3 Bucket",
                 "tags":          "{}",
-                "storage_size_gb":        round(size_gb, 4),
+                "storage_size_gb":        size_gb,
                 "request_count":          obj_count,
                 "estimated_monthly_cost": monthly_cost,
                 "launch_time":            creation_date,
-                "is_idle": (size_gb < 0.001 and obj_count == 0),
+                "is_idle":                is_idle,
             })
-    except Exception as e:
-        logger.error(f"S3 collection failed: {e}")
-        raise
+        except Exception as e:
+            logger.warning(f"Error collecting S3 bucket {name}: {e}")
+            continue
 
     return resources
 
