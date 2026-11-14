@@ -9,7 +9,8 @@ import { costsAPI } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
 
 const SERVICE_COLORS = {
-  EC2: '#f97316', S3: '#22c55e', RDS: '#3b82f6', Lambda: '#a78bfa', AzureVM: '#0078d4'
+  EC2: '#f97316', S3: '#22c55e', RDS: '#3b82f6', Lambda: '#a78bfa',
+  AzureVM: '#0078d4', AzureSQL: '#00a4ef', AzureBlob: '#00bcf2', AzureFunctions: '#68217a'
 }
 
 const CustomTooltip = ({ active, payload, label }) => {

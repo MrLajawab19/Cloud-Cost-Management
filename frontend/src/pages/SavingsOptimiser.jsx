@@ -79,7 +79,7 @@ export default function SavingsOptimiser() {
             Not enough history yet - stay pay-as-you-go
           </div>
           <div style={{ fontSize: '13px', color: 'var(--text-3)', maxWidth: '440px', margin: '0 auto' }}>
-            No eligible services (EC2, RDS, AzureVM) currently meet the historical data and spend thresholds required for commitment plan analysis.
+            No eligible services (EC2, RDS, AzureVM, AzureSQL) currently meet the historical data and spend thresholds required for commitment plan analysis.
           </div>
         </div>
       ) : (
@@ -105,7 +105,11 @@ export default function SavingsOptimiser() {
                         </span>
                       )}
                       <h2 style={{ fontSize: '18px', fontWeight: 700, margin: 0, color: 'var(--text-1)' }}>
-                        {svc.service === 'AzureVM' ? 'Azure Virtual Machines' : `${svc.service} Compute`}
+                        {svc.service === 'AzureVM' ? 'Azure Virtual Machines'
+                          : svc.service === 'AzureSQL' ? 'Azure SQL Database'
+                          : svc.service === 'AzureBlob' ? 'Azure Blob Storage'
+                          : svc.service === 'AzureFunctions' ? 'Azure Functions'
+                          : `${svc.service} Compute`}
                       </h2>
                     </div>
                     <div style={{ fontSize: '13px', color: 'var(--text-3)', marginTop: '4px' }}>

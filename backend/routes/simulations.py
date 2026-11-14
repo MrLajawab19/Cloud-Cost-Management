@@ -20,6 +20,7 @@ from database import get_db
 from services.security import get_current_user
 from services.what_if_simulator import run_simulation, SimulationResult
 from services.aws_collector import EC2_HOURLY_PRICE
+from services.cleanup_advisor import AZURE_DEMO_SAVINGS_CONSTANTS
 from services.ml_predictor import predict_costs
 from models.user import User
 from models.account import CloudAccount
@@ -135,11 +136,11 @@ def get_resource_options(
         elif svc == "RDS":
             allowed_actions = ["stop", "delete"]
             target_types = []
-        elif svc == "AzureVM":
+        elif svc in ["AzureVM", "AzureSQL"]:
             # Per specification: resize is only offered if an Azure price table exists
             allowed_actions = ["stop", "delete"]
             target_types = []
-        elif svc in ["S3", "Lambda"]:
+        elif svc in ["S3", "Lambda", "AzureBlob", "AzureFunctions"]:
             allowed_actions = ["delete"]
             target_types = []
         else:
@@ -202,9 +203,9 @@ def simulate_resource(
     svc = res.service_type
 
     # Action validations
-    if svc == "AzureVM" and action == "resize":
-        raise HTTPException(status_code=400, detail="Resize is not offered for AzureVM: no price table available.")
-    if svc in ["S3", "Lambda"] and action in ["stop", "resize"]:
+    if svc in ["AzureVM", "AzureSQL"] and action == "resize":
+        raise HTTPException(status_code=400, detail=f"Resize is not offered for {svc}: no price table available.")
+    if svc in ["S3", "Lambda", "AzureBlob", "AzureFunctions"] and action in ["stop", "resize"]:
         raise HTTPException(status_code=400, detail=f"Action '{act_raw}' is not supported for {svc}. Only deletion is available.")
     if svc == "RDS" and action == "resize":
         raise HTTPException(status_code=400, detail="Resize is not supported for RDS. Allowed actions: stop, delete.")
@@ -300,6 +301,19 @@ def simulate_resource(
             side_effects.append("VM is deallocated and compute stops. Dynamic public IP address is released unless static.")
             if has_anomaly_hold:
                 risk_notes.append(f"FR-7 Safety Rule: Automatic stop would be held due to an active unresolved anomaly on {res.service_type} within the last 14 days.")
+        elif svc == "AzureSQL":
+            storage_gb = res.storage_size_gb or 50.0
+            storage_rate = AZURE_DEMO_SAVINGS_CONSTANTS.get("sql_paused_storage_rate_per_gb", 0.115)
+            sql_storage_cost = round(storage_gb * storage_rate, 2)
+            new_monthly_cost = round(min(cost, sql_storage_cost), 2)
+            monthly_saving = round(max(0.0, cost - new_monthly_cost), 2)
+            remaining_cost_after_action = new_monthly_cost
+            remaining_cost_reason = f"Allocated DB storage charges ({storage_gb:.0f} GB @ ${storage_rate:.3f}/GB-month) continue to accrue while database is paused"
+            formula_note = f"Compute cost eliminated; allocated storage ({storage_gb:.0f} GB @ ${storage_rate:.3f}/GB-month) retained."
+            side_effects.append("Database is paused; incoming client connections and transactions will fail until resumed.")
+            risk_notes.append("Storage and backup costs continue while paused.")
+            if has_anomaly_hold:
+                risk_notes.append(f"FR-7 Safety Rule: Automatic stop would be held due to an active unresolved anomaly on {res.service_type} within the last 14 days.")
         else:
             new_monthly_cost = 0.0
             monthly_saving = cost
@@ -330,6 +344,15 @@ def simulate_resource(
         elif svc == "AzureVM":
             side_effects.append("Virtual Machine and attached OS disks deleted permanently.")
             risk_notes.append("Irreversible action: Data loss warning. Create a managed disk snapshot before deletion.")
+        elif svc == "AzureBlob":
+            side_effects.append("Storage account containers and blobs deleted permanently.")
+            risk_notes.append("Irreversible action: Data loss warning. Ensure data is backed up before deletion.")
+        elif svc == "AzureSQL":
+            side_effects.append("Azure SQL Database deleted permanently.")
+            risk_notes.append("Irreversible action: Data loss warning. Take a database export or backup before deletion.")
+        elif svc == "AzureFunctions":
+            side_effects.append("Function App code and configurations deleted permanently; execution endpoints will become unreachable.")
+            risk_notes.append("Verify downstream triggers and dependencies before deleting.")
         else:
             side_effects.append("Resource deleted permanently.")
             risk_notes.append("Irreversible action: Data loss warning.")

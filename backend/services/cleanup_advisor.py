@@ -19,6 +19,13 @@ logger = logging.getLogger(__name__)
 HIGH_SAVINGS_THRESHOLD   = 50.0   
 MEDIUM_SAVINGS_THRESHOLD = 10.0   
 
+# Illustrative savings constants for demo Azure resources
+AZURE_DEMO_SAVINGS_CONSTANTS = {
+    "blob_large_unused_savings_pct": 0.50,    # Moving large unused blob to Cool/Archive saves ~50%
+    "sql_underutilized_savings_pct": 0.60,    # Downsizing SQL saves 60%
+    "sql_paused_storage_rate_per_gb": 0.115,  # Storage rate for paused SQL ($0.115/GB-month)
+}
+
 def _severity(monthly_cost: float) -> str:
     if monthly_cost >= HIGH_SAVINGS_THRESHOLD:
         return "high"
@@ -155,6 +162,84 @@ def generate_recommendations(db: Session) -> int:
                             severity=_severity(cost),
                             savings=round(cost * 0.6, 2))
 
+        # -- AzureBlob Rules --------------------------------------
+        elif r.service_type == "AzureBlob":
+            if r.storage_size_gb is not None and r.request_count is not None:
+                if r.storage_size_gb < 0.001 and r.request_count == 0:
+                    _upsert_rec(db, current_cycle_keys, r,
+                        issue="Empty Azure Blob Storage",
+                        desc=f"Azure Blob container '{r.resource_name}' contains no objects and 0 requests.",
+                        action="Delete the container.",
+                        remediation_type="manual",
+                        severity="low",
+                        savings=0.0)
+                elif r.storage_size_gb > 500 and r.request_count == 0:
+                    if r.estimated_monthly_cost is not None:
+                        cost = r.estimated_monthly_cost
+                        savings = round(cost * AZURE_DEMO_SAVINGS_CONSTANTS["blob_large_unused_savings_pct"], 2)
+                        _upsert_rec(db, current_cycle_keys, r,
+                            issue="Large Unused Blob Storage",
+                            desc=f"Azure Blob container '{r.resource_name}' holds {r.storage_size_gb:.1f} GB with zero requests.",
+                            action="Move to Cool or Archive tier.",
+                            remediation_type="manual",
+                            severity=_severity(cost),
+                            savings=savings)
+
+        # -- AzureSQL Rules ---------------------------------------
+        elif r.service_type == "AzureSQL":
+            if r.status == "running":
+                if (
+                    r.cpu_utilization_avg is not None
+                    and r.runtime_hours is not None
+                    and r.runtime_hours >= 168
+                ):
+                    cpu = r.cpu_utilization_avg
+                    if cpu < 1.0:
+                        if r.estimated_monthly_cost is not None:
+                            cost = r.estimated_monthly_cost
+                            storage_gb = r.storage_size_gb or 50.0
+                            storage_cost = round(storage_gb * AZURE_DEMO_SAVINGS_CONSTANTS["sql_paused_storage_rate_per_gb"], 2)
+                            savings = round(max(0.0, cost - storage_cost), 2)
+                            _upsert_rec(db, current_cycle_keys, r,
+                                issue="Idle Azure SQL Database",
+                                desc=f"Azure SQL DB '{r.resource_name}' ({r.resource_type}) is running with <1% CPU for >=168 hours.",
+                                action="Pause or scale down the database.",
+                                remediation_type="manual",
+                                severity=_severity(cost),
+                                savings=savings)
+                    elif 1.0 <= cpu < 5.0:
+                        if r.estimated_monthly_cost is not None:
+                            cost = r.estimated_monthly_cost
+                            savings = round(cost * AZURE_DEMO_SAVINGS_CONSTANTS["sql_underutilized_savings_pct"], 2)
+                            _upsert_rec(db, current_cycle_keys, r,
+                                issue="Underutilized Azure SQL Database",
+                                desc=f"Azure SQL DB '{r.resource_name}' ({r.resource_type}) is underutilized ({cpu:.1f}% avg CPU).",
+                                action="Consider downsizing to a smaller compute tier.",
+                                remediation_type="manual",
+                                severity=_severity(cost),
+                                savings=savings)
+            elif r.status in ["stopped", "paused"]:
+                storage_gb = r.storage_size_gb or 50.0
+                storage_cost = round(storage_gb * AZURE_DEMO_SAVINGS_CONSTANTS["sql_paused_storage_rate_per_gb"], 2)
+                _upsert_rec(db, current_cycle_keys, r,
+                    issue="Paused Azure SQL Database (storage cost)",
+                    desc=f"Azure SQL DB '{r.resource_name}' is paused but still charged ${storage_cost:.2f}/mo for {storage_gb:.0f} GB allocated storage.",
+                    action="Take export and drop database if no longer needed.",
+                    remediation_type="manual",
+                    severity="medium",
+                    savings=storage_cost)
+
+        # -- AzureFunctions Rules ---------------------------------
+        elif r.service_type == "AzureFunctions":
+            if (r.request_count or 0) == 0:
+                _upsert_rec(db, current_cycle_keys, r,
+                    issue="Unused Azure Function App",
+                    desc=f"Azure Function App '{r.resource_name}' has 0 invocations in 30 days.",
+                    action="Delete the function app.",
+                    remediation_type="manual",
+                    severity="low",
+                    savings=0.0)
+
     db.commit()
     
     # --- STALE CLEANUP PHASE ---
@@ -169,7 +254,13 @@ def generate_recommendations(db: Session) -> int:
         "Stopped RDS Instance (Storage Cost)",
         "Unused Lambda Function",
         "Idle AzureVM",
-        "Underutilized AzureVM"
+        "Underutilized AzureVM",
+        "Empty Azure Blob Storage",
+        "Large Unused Blob Storage",
+        "Idle Azure SQL Database",
+        "Underutilized Azure SQL Database",
+        "Paused Azure SQL Database (storage cost)",
+        "Unused Azure Function App"
     ]
     
     all_active = db.query(Recommendation).filter(

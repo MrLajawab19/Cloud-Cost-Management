@@ -14,10 +14,14 @@ import { useAuth } from '../contexts/AuthContext'
 
 // ── Service colour palette ────────────────────────────────────────
 const SVC_COLORS = {
-  EC2:    '#ec7211',
-  RDS:    '#0073bb',
-  S3:     '#1d8102',
-  Lambda: '#6366f1',
+  EC2:            '#ec7211',
+  RDS:            '#0073bb',
+  S3:             '#1d8102',
+  Lambda:         '#6366f1',
+  AzureVM:        '#0078d4',
+  AzureSQL:       '#00a4ef',
+  AzureBlob:      '#00bcf2',
+  AzureFunctions: '#68217a',
 }
 const SVC_COLOR_DEFAULT = '#94a3b8'
 

@@ -212,10 +212,10 @@ def inject_demo_scenario(
             raise HTTPException(status_code=400, detail=f"Service {payload.service} not allowed on AWS demo account")
         target_service = payload.service or "EC2"
     elif provider == "azure":
-        valid_services = ["AzureVM"]
-        if payload.service and payload.service != "AzureVM":
-            raise HTTPException(status_code=400, detail=f"Only AzureVM is supported on Azure demo account")
-        target_service = "AzureVM"
+        valid_services = ["AzureVM", "AzureSQL", "AzureBlob", "AzureFunctions"]
+        if payload.service and payload.service not in valid_services:
+            raise HTTPException(status_code=400, detail=f"Service {payload.service} not allowed on Azure demo account")
+        target_service = payload.service or "AzureVM"
     else:
         raise HTTPException(status_code=400, detail=f"Unsupported provider {provider}")
 
@@ -433,7 +433,7 @@ def inject_demo_scenario(
             if target_service not in valid_services:
                 raise HTTPException(status_code=400, detail=f"Service '{target_service}' is not valid for AWS demo account")
         else:
-            valid_services = {"AzureVM"}
+            valid_services = {"AzureVM", "AzureSQL", "AzureBlob", "AzureFunctions"}
             if target_service not in valid_services:
                 raise HTTPException(status_code=400, detail=f"Service '{target_service}' is not valid for Azure demo account")
 
@@ -477,6 +477,27 @@ def inject_demo_scenario(
             r_status = "running"
             cpu_avg = 15.0
             rt_hours = 360.0
+        elif target_service == "AzureSQL":
+            res_id = f"/subscriptions/demo/resourceGroups/injected/providers/Microsoft.Sql/servers/injected-sql/databases/db-{res_uid.hex[:8]}"
+            r_name = "injected-azuresql-service"
+            r_type = "GP_Gen5_2"
+            r_status = "running"
+            cpu_avg = 15.0
+            rt_hours = 360.0
+        elif target_service == "AzureBlob":
+            res_id = f"/subscriptions/demo/resourceGroups/injected/providers/Microsoft.Storage/storageAccounts/injectedblob{res_uid.hex[:8]}"
+            r_name = "injected-azureblob-service"
+            r_type = "Standard LRS"
+            r_status = "available"
+            cpu_avg = None
+            rt_hours = 0.0
+        elif target_service == "AzureFunctions":
+            res_id = f"/subscriptions/demo/resourceGroups/injected/providers/Microsoft.Web/sites/injected-fn-{res_uid.hex[:8]}"
+            r_name = "injected-azurefunctions-service"
+            r_type = "Consumption"
+            r_status = "running"
+            cpu_avg = None
+            rt_hours = 0.0
         else:
             res_id = f"demo-injected-{target_service.lower()}-{res_uid.hex[:8]}"
             r_name = f"injected-{target_service.lower()}-service"

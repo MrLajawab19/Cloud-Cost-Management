@@ -283,6 +283,150 @@ def generate_demo_resources(account: CloudAccount) -> List[Dict[str, Any]]:
                 "launch_time": now - timedelta(days=25),
                 "is_idle": True,
             },
+            # --- AzureBlob ---
+            # 5. Normal Blob container (Standard LRS, ~250 GB, requests > 0)
+            {
+                "account_id": acc_id,
+                "resource_id": f"demo-azure-blob-prod-{acc_id[:8]}",
+                "resource_name": "demo-azure-blob-prod",
+                "service_type": "AzureBlob",
+                "resource_type": "Standard LRS",
+                "region": account.region or "eastus",
+                "status": "available",
+                "cpu_utilization_avg": None,
+                "runtime_hours": None,
+                "storage_size_gb": 250.0,
+                "request_count": 12500,
+                "estimated_monthly_cost": 5.0,
+                "daily_cost_usd": 0.1667,
+                "launch_time": now - timedelta(days=35),
+                "is_idle": False,
+            },
+            # 6. Large unused Blob container (>500 GB, 0 requests)
+            {
+                "account_id": acc_id,
+                "resource_id": f"demo-azure-blob-unused-{acc_id[:8]}",
+                "resource_name": "demo-azure-blob-large-unused",
+                "service_type": "AzureBlob",
+                "resource_type": "Standard LRS",
+                "region": account.region or "eastus",
+                "status": "available",
+                "cpu_utilization_avg": None,
+                "runtime_hours": None,
+                "storage_size_gb": 600.0,
+                "request_count": 0,
+                "estimated_monthly_cost": 12.0,
+                "daily_cost_usd": 0.40,
+                "launch_time": now - timedelta(days=30),
+                "is_idle": True,
+            },
+            # 7. Empty Blob container (0 GB, 0 requests)
+            {
+                "account_id": acc_id,
+                "resource_id": f"demo-azure-blob-empty-{acc_id[:8]}",
+                "resource_name": "demo-azure-blob-empty",
+                "service_type": "AzureBlob",
+                "resource_type": "Standard LRS",
+                "region": account.region or "eastus",
+                "status": "available",
+                "cpu_utilization_avg": None,
+                "runtime_hours": None,
+                "storage_size_gb": 0.0,
+                "request_count": 0,
+                "estimated_monthly_cost": 0.0,
+                "daily_cost_usd": 0.0,
+                "launch_time": now - timedelta(days=20),
+                "is_idle": True,
+            },
+            # --- AzureSQL ---
+            # 8. Production SQL Database (GP_Gen5_2, running, CPU ~45%)
+            {
+                "account_id": acc_id,
+                "resource_id": f"demo-azure-sql-prod-{acc_id[:8]}",
+                "resource_name": "demo-azure-sql-prod",
+                "service_type": "AzureSQL",
+                "resource_type": "GP_Gen5_2",
+                "region": account.region or "eastus",
+                "status": "running",
+                "cpu_utilization_avg": 45.0,
+                "runtime_hours": 720.0,
+                "storage_size_gb": 100.0,
+                "estimated_monthly_cost": 145.0,
+                "daily_cost_usd": 4.833,
+                "launch_time": now - timedelta(days=40),
+                "is_idle": False,
+            },
+            # 9. Idle SQL Database (GP_Gen5_2, running, CPU 0.5%, runtime > 168h)
+            {
+                "account_id": acc_id,
+                "resource_id": f"demo-azure-sql-idle-{acc_id[:8]}",
+                "resource_name": "demo-azure-sql-idle",
+                "service_type": "AzureSQL",
+                "resource_type": "GP_Gen5_2",
+                "region": account.region or "eastus",
+                "status": "running",
+                "cpu_utilization_avg": 0.5,
+                "runtime_hours": 250.0,
+                "storage_size_gb": 50.0,
+                "estimated_monthly_cost": 73.0,
+                "daily_cost_usd": 2.433,
+                "launch_time": now - timedelta(days=15),
+                "is_idle": True,
+            },
+            # 10. Paused SQL Database (stopped, retaining storage cost)
+            {
+                "account_id": acc_id,
+                "resource_id": f"demo-azure-sql-paused-{acc_id[:8]}",
+                "resource_name": "demo-azure-sql-paused",
+                "service_type": "AzureSQL",
+                "resource_type": "GP_Gen5_2",
+                "region": account.region or "eastus",
+                "status": "stopped",
+                "cpu_utilization_avg": None,
+                "runtime_hours": 0.0,
+                "storage_size_gb": 100.0,
+                "estimated_monthly_cost": 11.5,
+                "daily_cost_usd": 0.383,
+                "launch_time": now - timedelta(days=25),
+                "is_idle": True,
+            },
+            # --- AzureFunctions ---
+            # 11. Active Function App (requests > 0)
+            {
+                "account_id": acc_id,
+                "resource_id": f"demo-azure-fn-active-{acc_id[:8]}",
+                "resource_name": "demo-azure-fn-api",
+                "service_type": "AzureFunctions",
+                "resource_type": "Consumption",
+                "region": account.region or "eastus",
+                "status": "running",
+                "cpu_utilization_avg": None,
+                "runtime_hours": 0.0,
+                "storage_size_gb": None,
+                "request_count": 450000,
+                "estimated_monthly_cost": 4.5,
+                "daily_cost_usd": 0.15,
+                "launch_time": now - timedelta(days=30),
+                "is_idle": False,
+            },
+            # 12. Unused Function App (0 executions)
+            {
+                "account_id": acc_id,
+                "resource_id": f"demo-azure-fn-unused-{acc_id[:8]}",
+                "resource_name": "demo-azure-fn-legacy",
+                "service_type": "AzureFunctions",
+                "resource_type": "Consumption",
+                "region": account.region or "eastus",
+                "status": "running",
+                "cpu_utilization_avg": None,
+                "runtime_hours": 0.0,
+                "storage_size_gb": None,
+                "request_count": 0,
+                "estimated_monthly_cost": 0.0,
+                "daily_cost_usd": 0.0,
+                "launch_time": now - timedelta(days=20),
+                "is_idle": True,
+            },
         ]
     return []
 
@@ -335,37 +479,43 @@ def seed_demo_history(db: Session, account: CloudAccount, days: int = 45):
                 db.add(cr)
 
     elif account.provider == "azure":
-        profile = {"base": 13.87, "trend": 0.004}
-        rng = random.Random(101)
-        sigma = 0.02
-        weekly_amp = 0.02
-        spike_mult = 1.3
+        profiles = {
+            "AzureVM":        {"base": 13.87, "trend": 0.004},
+            "AzureSQL":       {"base": 7.65,  "trend": 0.002},
+            "AzureBlob":      {"base": 0.567, "trend": 0.0001},
+            "AzureFunctions": {"base": 0.15,  "trend": 0.0},
+        }
+        rng = random.Random(100)
+        sigma = 0.03
+        weekly_amp = 0.005
+        spike_mult = 1.35
 
         for day_offset in range(days, 0, -1):
             rec_date = today - timedelta(days=day_offset)
             t = days - day_offset
-            trend = profile["trend"] * t
-            weekly = weekly_amp * math.sin(2 * math.pi * t / 7.0)
-            raw_noise = rng.gauss(0, sigma)
-            clipped_noise = max(-2 * sigma, min(2 * sigma, raw_noise))
-            daily_cost = profile["base"] * (1.0 + weekly + clipped_noise) + trend
+            for svc, p in profiles.items():
+                trend = p["trend"] * t
+                weekly = weekly_amp * math.sin(2 * math.pi * t / 7.0)
+                raw_noise = rng.gauss(0, sigma)
+                clipped_noise = max(-2 * sigma, min(2 * sigma, raw_noise))
+                daily_cost = p["base"] * (1.0 + weekly + clipped_noise) + trend
 
-            # ONE small single-day AzureVM cost spike 7 days before today
-            if day_offset == 7:
-                daily_cost *= spike_mult
+                # ONE small single-day AzureVM cost spike 7 days before today
+                if svc == "AzureVM" and day_offset == 7:
+                    daily_cost *= spike_mult
 
-            source = "synthetic_seed" if day_offset > 1 else "azure_demo"
-            cr = CostRecord(
-                account_id=acc_id,
-                resource_id=None,
-                service_type="AzureVM",
-                region=account.region or "eastus",
-                record_date=rec_date,
-                daily_cost_usd=round(max(0.001, daily_cost), 6),
-                monthly_estimate=round(daily_cost * 30, 4),
-                source=source,
-            )
-            db.add(cr)
+                source = "synthetic_seed" if day_offset > 1 else "azure_demo"
+                cr = CostRecord(
+                    account_id=acc_id,
+                    resource_id=None,
+                    service_type=svc,
+                    region=account.region or "eastus",
+                    record_date=rec_date,
+                    daily_cost_usd=round(max(0.001, daily_cost), 6),
+                    monthly_estimate=round(daily_cost * 30, 4),
+                    source=source,
+                )
+                db.add(cr)
 
     db.commit()
 

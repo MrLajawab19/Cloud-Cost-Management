@@ -12,7 +12,10 @@ import { anomaliesAPI } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
 
 // ── Colour helpers ────────────────────────────────────────────────
-const SVC_COLORS = { EC2: '#ec7211', RDS: '#0073bb', S3: '#1d8102', Lambda: '#6366f1' }
+const SVC_COLORS = {
+  EC2: '#ec7211', RDS: '#0073bb', S3: '#1d8102', Lambda: '#6366f1',
+  AzureVM: '#0078d4', AzureSQL: '#00a4ef', AzureBlob: '#00bcf2', AzureFunctions: '#68217a'
+}
 const SEV_COLOR  = { warning: '#fbbf24', critical: '#f87171' }
 const DIR_ICON   = {
   spike: <TrendingUp  size={13} style={{ marginRight: 4 }} />,

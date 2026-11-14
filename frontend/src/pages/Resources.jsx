@@ -5,7 +5,7 @@ import { resourcesAPI } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
 
 export default function Resources() {
-  const { dataVersion } = useAuth()
+  const { activeAccount, dataVersion } = useAuth()
   const [resources, setResources] = useState([])
   const [total,     setTotal]     = useState(0)
   const [loading,   setLoading]   = useState(true)
@@ -72,6 +72,10 @@ export default function Resources() {
             <option value="S3">S3</option>
             <option value="RDS">RDS</option>
             <option value="Lambda">Lambda</option>
+            <option value="AzureVM">AzureVM</option>
+            <option value="AzureSQL">AzureSQL</option>
+            <option value="AzureBlob">AzureBlob</option>
+            <option value="AzureFunctions">AzureFunctions</option>
           </select>
         </div>
 
@@ -98,6 +102,13 @@ export default function Resources() {
           Show Idle Resources Only
         </label>
       </div>
+
+      {/* Demo note */}
+      {(activeAccount?.provider === 'azure' || activeAccount?.name?.toLowerCase().includes('azure')) && (
+        <div style={{ fontSize: '12px', color: 'var(--text-3)', marginBottom: 'var(--s-2)', fontStyle: 'italic' }}>
+          Blob, SQL and Functions are demo-only; the real Azure connector collects virtual machines.
+        </div>
+      )}
 
       {/* Summary line */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--s-3)' }}>

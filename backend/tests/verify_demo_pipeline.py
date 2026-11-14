@@ -215,12 +215,12 @@ def run_suite(engine, is_copy_db: bool = False):
         print(f"  Distinct cost_records.source: {sources_list}")
 
         if label == "AWS":
-            # Assert AWS has zero AzureVM resources or cost rows
-            az_in_aws_res = db.query(Resource).filter(Resource.account_id == demo_acc.id, Resource.service_type == "AzureVM").count()
-            az_in_aws_cost = db.query(CostRecord).filter(CostRecord.account_id == demo_acc.id, CostRecord.service_type == "AzureVM").count()
-            assert az_in_aws_res == 0, f"AWS demo account contains {az_in_aws_res} AzureVM resources"
-            assert az_in_aws_cost == 0, f"AWS demo account contains {az_in_aws_cost} AzureVM cost records"
-            print("  PASS: Provider separation: AWS demo account has ZERO AzureVM resources/cost rows.")
+            # Assert AWS has zero Azure* resources or cost rows
+            az_in_aws_res = db.query(Resource).filter(Resource.account_id == demo_acc.id, Resource.service_type.like("Azure%")).count()
+            az_in_aws_cost = db.query(CostRecord).filter(CostRecord.account_id == demo_acc.id, CostRecord.service_type.like("Azure%")).count()
+            assert az_in_aws_res == 0, f"AWS demo account contains {az_in_aws_res} Azure resources"
+            assert az_in_aws_cost == 0, f"AWS demo account contains {az_in_aws_cost} Azure cost records"
+            print("  PASS: Provider separation: AWS demo account has ZERO Azure resources/cost rows.")
 
             assert demo_acc.grace_period_hours == 1, f"Expected grace_period_hours=1, got {demo_acc.grace_period_hours}"
             winner_mape = comp.get("poly_mape") if comp.get("winner") == "Polynomial Regression" else comp.get("hw_mape")
@@ -287,12 +287,12 @@ def run_suite(engine, is_copy_db: bool = False):
             print(f"  PASS: Escalation moved to action_due without automated execution log (guided remediation).")
 
         elif label == "Azure":
-            # Assert Azure demo account has ONLY AzureVM
-            non_az_res = db.query(Resource).filter(Resource.account_id == demo_acc.id, Resource.service_type != "AzureVM").count()
-            non_az_cost = db.query(CostRecord).filter(CostRecord.account_id == demo_acc.id, CostRecord.service_type != "AzureVM").count()
-            assert non_az_res == 0, f"Azure demo account contains non-AzureVM resources: {non_az_res}"
-            assert non_az_cost == 0, f"Azure demo account contains non-AzureVM cost records: {non_az_cost}"
-            print("  PASS: Provider separation: Azure demo account has ONLY AzureVM resources and cost records.")
+            # Assert Azure demo account has ONLY Azure* types
+            non_az_res = db.query(Resource).filter(Resource.account_id == demo_acc.id, ~Resource.service_type.like("Azure%")).count()
+            non_az_cost = db.query(CostRecord).filter(CostRecord.account_id == demo_acc.id, ~CostRecord.service_type.like("Azure%")).count()
+            assert non_az_res == 0, f"Azure demo account contains non-Azure resources: {non_az_res}"
+            assert non_az_cost == 0, f"Azure demo account contains non-Azure cost records: {non_az_cost}"
+            print("  PASS: Provider separation: Azure demo account has ONLY Azure* resources and cost records.")
 
             assert demo_acc.grace_period_hours == 1, f"Expected grace_period_hours=1, got {demo_acc.grace_period_hours}"
             winner_mape = comp.get("poly_mape") if comp.get("winner") == "Polynomial Regression" else comp.get("hw_mape")

@@ -263,7 +263,12 @@ export default function LiveDataLab() {
                     <option value="Lambda">Lambda Functions</option>
                   </>
                 ) : (
-                  <option value="AzureVM">Azure Virtual Machines</option>
+                  <>
+                    <option value="AzureVM">Azure Virtual Machines</option>
+                    <option value="AzureSQL">Azure SQL Database</option>
+                    <option value="AzureBlob">Azure Blob Storage</option>
+                    <option value="AzureFunctions">Azure Functions</option>
+                  </>
                 )}
               </select>
             </div>

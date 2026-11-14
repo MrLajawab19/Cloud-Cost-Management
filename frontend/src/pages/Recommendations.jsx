@@ -241,6 +241,9 @@ function RecommendationsContent() {
             <option value="RDS">RDS</option>
             <option value="Lambda">Lambda</option>
             <option value="AzureVM">AzureVM</option>
+            <option value="AzureSQL">AzureSQL</option>
+            <option value="AzureBlob">AzureBlob</option>
+            <option value="AzureFunctions">AzureFunctions</option>
           </select>
         </div>
       </div>

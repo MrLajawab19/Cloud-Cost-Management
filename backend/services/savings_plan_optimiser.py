@@ -51,20 +51,22 @@ def generate_sp_recommendations(db: Session, account_id: str) -> List[Recommenda
             continue
             
         # Synthetic pricing logic (Partial Upfront, 1-Year mock)
-        if srv == "AzureVM":
+        if srv in ["AzureVM", "AzureSQL"]:
             discount_factor = 1.0 - _AZURE_MOCK_PRICING.get("discount_pct", 0.25)
             upfront_pct = _AZURE_MOCK_PRICING.get("upfront_pct", 0.50)
-            rec_id = "AzureVM-RI-1YR"
-            rec_name = "AzureVM 1-Year Reserved Instance"
-            action = "Purchase Reserved VM Instance"
+            rec_id = f"{srv}-RI-1YR"
+            rec_name = f"{srv} 1-Year Reserved Instance"
+            action = f"Purchase Reserved {srv} Instance"
             desc = f"Consistent {srv} usage detected. Purchasing a 1-Year Reserved Instance can reduce effective costs by 25%."
-        else:
+        elif srv in ["EC2", "RDS"]:
             discount_factor = 1.0 - _MOCK_PRICING.get("discount_pct", 0.30)
             upfront_pct = _MOCK_PRICING.get("upfront_pct", 0.50)
             rec_id = f"{srv}-SP-1YR"
             rec_name = f"{srv} 1-Year Savings Plan"
             action = "Purchase Savings Plan"
             desc = f"Consistent {srv} usage detected. Purchasing a 1-Year Savings Plan can reduce effective costs by 30%."
+        else:
+            continue
 
         monthly_pct = 1.0 - upfront_pct
         

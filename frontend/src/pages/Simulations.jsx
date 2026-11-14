@@ -9,7 +9,10 @@ import { recommendationsAPI, simulationsAPI, predictionsAPI } from '../api/clien
 import { useAuth } from '../contexts/AuthContext'
 
 // ── Helpers ───────────────────────────────────────────────────────
-const SVC_COLORS = { EC2: '#ec7211', RDS: '#0073bb', S3: '#1d8102', Lambda: '#6366f1', AzureVM: '#0089d6' }
+const SVC_COLORS = {
+  EC2: '#ec7211', RDS: '#0073bb', S3: '#1d8102', Lambda: '#6366f1',
+  AzureVM: '#0089d6', AzureSQL: '#00a4ef', AzureBlob: '#00bcf2', AzureFunctions: '#68217a'
+}
 
 function fmt(v) {
   if (v == null || v === 'Cost unavailable') return 'Cost unavailable'

@@ -88,9 +88,11 @@ def compute_savings_plans(db: Session, account: CloudAccount) -> Dict[str, Any]:
     provider = account.provider.lower()
 
     if provider == "azure":
-        base_eligible = ["AzureVM"]
+        base_eligible = ["AzureVM", "AzureSQL"]
+        default_services = ["AzureVM", "AzureSQL", "AzureBlob", "AzureFunctions"]
     else:
         base_eligible = ["EC2", "RDS"]
+        default_services = ["EC2", "RDS"]
 
     # Detect any injected services tagged source='demo_injected'
     injected_services = [
@@ -100,7 +102,7 @@ def compute_savings_plans(db: Session, account: CloudAccount) -> Dict[str, Any]:
         .all()
     ]
 
-    eligible_services = list(base_eligible)
+    eligible_services = list(default_services)
     for srv in injected_services:
         if srv not in eligible_services:
             eligible_services.append(srv)
@@ -196,7 +198,7 @@ def compute_savings_plans(db: Session, account: CloudAccount) -> Dict[str, Any]:
         # Determine baseline_monthly
         if existing_rec:
             # Derive baseline from existing recommendation to ensure 100% exact reproduction
-            disc = 0.25 if srv == "AzureVM" else 0.30
+            disc = 0.25 if srv in ["AzureVM", "AzureSQL"] else 0.30
             upfront_p = 0.50
             baseline_monthly = round(existing_rec.upfront_cost_usd / (12.0 * upfront_p * (1.0 - disc)), 2)
         else:
@@ -249,7 +251,7 @@ def compute_savings_plans(db: Session, account: CloudAccount) -> Dict[str, Any]:
         }
 
         # Option 3: 1y_partial_upfront (reproduces existing recommendation exactly)
-        part_disc = 0.25 if srv == "AzureVM" else 0.30
+        part_disc = 0.25 if srv in ["AzureVM", "AzureSQL"] else 0.30
         if existing_rec:
             part_upfront_cash = round(existing_rec.upfront_cost_usd, 2)
             part_monthly_saving = round(existing_rec.potential_savings_usd, 2)

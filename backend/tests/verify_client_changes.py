@@ -264,9 +264,10 @@ resp_c_az = client.get(f"/costs/explain?account_id={demo_azure.id}", headers=hea
 assert resp_c_az.status_code == 200
 data_c_az = resp_c_az.json()
 svcs_az = data_c_az.get("services", [])
-assert len(svcs_az) == 1
-assert svcs_az[0]["service"] == "AzureVM"
-assert 99.0 <= svcs_az[0]["share_of_total_pct"] <= 101.0
+assert len(svcs_az) == 4
+assert {s["service"] for s in svcs_az} == {"AzureVM", "AzureSQL", "AzureBlob", "AzureFunctions"}
+total_pct = sum(s["share_of_total_pct"] for s in svcs_az)
+assert 99.0 <= total_pct <= 101.0
 
 # Real AWS (2 resources) and Real Azure (empty) return 200
 r_c_raws = client.get(f"/costs/explain?account_id={real_aws.id}", headers=headers)
