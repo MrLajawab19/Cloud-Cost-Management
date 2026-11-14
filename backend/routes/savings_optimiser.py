@@ -260,15 +260,23 @@ def compute_savings_plans(db: Session, account: CloudAccount) -> Dict[str, Any]:
             .all()
         )
 
-        # Unresolved anomalies for this service
+        # All anomalies for this service (resolved or unresolved) in lookback window
+        srv_anom_dates = {
+            a.record_date for a in db.query(Anomaly).filter(
+                Anomaly.account_id == account.id,
+                Anomaly.service_type == srv,
+                Anomaly.record_date >= (date.today() - timedelta(days=35))
+            ).all()
+        }
+
+        # Unresolved anomalies for this service (triggers hold)
         srv_unresolved_anoms = [
             a for a in recent_anomalies
             if a.service_type == srv and a.is_resolved == False
         ]
-        unresolved_dates = {a.record_date for a in srv_unresolved_anoms}
 
-        # Exclude any dates that fall in an active (unresolved) anomaly window for that service
-        clean_records = [r for r in recent_records if r.record_date not in unresolved_dates]
+        # Exclude any dates that fall in an anomaly window for that service (non-anomalous baseline)
+        clean_records = [r for r in recent_records if r.record_date not in srv_anom_dates]
         clean_records.sort(key=lambda x: x.record_date)
         clean_daily_costs = [float(r.daily_cost_usd) for r in clean_records]
 
@@ -311,10 +319,16 @@ def compute_savings_plans(db: Session, account: CloudAccount) -> Dict[str, Any]:
 
             stable_floor_daily = float(np.percentile(clean_daily_costs, ILLUSTRATIVE_BEHAVIOR_HEURISTICS["FLOOR_PERCENTILE"]))
             stable_floor_monthly = stable_floor_daily * 30.0
-            coverage = max(
-                ILLUSTRATIVE_BEHAVIOR_HEURISTICS["MIN_COVERAGE"],
-                min(1.0, stable_floor_monthly / (baseline_monthly or 1.0))
-            )
+
+            # Steady usage (CV <= 0.10 and trend > -0.10) commits full baseline (100% coverage).
+            # Fluctuating, declining, or volatile usage scales commitment to the stable floor (min 50%, max 100%).
+            if cv_val <= ILLUSTRATIVE_BEHAVIOR_HEURISTICS["STABILITY_STEADY_CV"] and trend_raw > ILLUSTRATIVE_BEHAVIOR_HEURISTICS["TREND_DOWN_PCT"]:
+                coverage = 1.0
+            else:
+                coverage = max(
+                    ILLUSTRATIVE_BEHAVIOR_HEURISTICS["MIN_COVERAGE"],
+                    min(1.0, stable_floor_monthly / (baseline_monthly or 1.0))
+                )
             coverage_pct = int(round(coverage * 100))
             committed_monthly = round(baseline_monthly * coverage, 2)
             uncommitted_monthly = round(baseline_monthly * (1.0 - coverage), 2)
