@@ -316,6 +316,11 @@ function RecommendationsContent() {
                   {rec.action === "Purchase Savings Plan" && <Lock size={14} style={{color: '#8b5cf6'}} />}
                   <div><strong>Action Plan:</strong> {rec.action || 'Manual review'}</div>
                 </div>
+                {rec.issue === 'No Commitment' && (
+                  <div style={{ marginTop: 'var(--s-2)', fontSize: '12px', color: 'var(--text-3)', fontStyle: 'italic' }}>
+                    Default plan on the full baseline; see Savings Optimiser for the behaviour-adjusted plan.
+                  </div>
+                )}
               </div>
 
               <div className="rec-footer">

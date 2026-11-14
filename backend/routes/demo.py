@@ -151,8 +151,12 @@ def _capture_state(db: Session, account: CloudAccount) -> Dict[str, Any]:
         opt_summary = [
             {
                 "service": s["service"],
+                "cv": s.get("cv"),
+                "trend_pct": s.get("trend_pct"),
+                "coverage_pct": s.get("coverage_pct"),
                 "recommended": s["recommended"],
                 "reason": s["reason"],
+                "preview_if_resolved": s.get("preview_if_resolved"),
                 "is_new": s.get("is_new", False)
             }
             for s in plans.get("services", [])
@@ -341,6 +345,23 @@ def inject_demo_scenario(
                 source="demo_injected"
             )
             db.add(cr)
+
+    elif scenario == "volatile_usage":
+        target_service = payload.service or ("EC2" if provider == "aws" else "AzureVM")
+        n_days = max(7, min(payload.days if payload.days is not None else 16, 30))
+        # +/- 40% alternating daily cost over the last n_days to cross CV > 0.25 while preserving mean within 3%
+        for d in range(n_days, -1, -1):
+            r_date = today - timedelta(days=d)
+            rec = (
+                db.query(CostRecord)
+                .filter(CostRecord.account_id == acc.id, CostRecord.service_type == target_service, CostRecord.record_date == r_date)
+                .first()
+            )
+            if rec:
+                factor = 1.40 if (d % 2 == 0) else 0.60
+                rec.daily_cost_usd = round(rec.daily_cost_usd * factor, 4)
+                rec.monthly_estimate = round(rec.daily_cost_usd * 30.0, 4)
+                rec.source = "demo_injected"
 
     elif scenario == "new_idle_resource":
         # AWS: EC2 t3.medium cpu 0.3 runtime 300h; Azure: VM Standard_B2s cpu 0.4 runtime 250h

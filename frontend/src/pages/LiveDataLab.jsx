@@ -11,6 +11,7 @@ const SCENARIOS = [
   { id: 'normal_day',            name: 'Normal Day',            desc: 'Small seeded noise (<1%). Must not trigger any anomaly.' },
   { id: 'cost_spike',            name: 'Cost Spike',            desc: 'Single-day cost jump (+80% default). Causes an anomaly and locks optimiser.' },
   { id: 'sustained_drift',       name: 'Sustained Drift',       desc: 'Multi-day progressive spend drift (+%/day over N days).' },
+  { id: 'volatile_usage',        name: 'Volatile Usage',        desc: 'Alternating +/-35% daily costs for 14d (preserving mean). Pushes CV > 25% and triggers 1y_no_upfront.' },
   { id: 'cost_drop',             name: 'Cost Drop',             desc: 'Substantial downward drop in daily spend.' },
   { id: 'new_idle_resource',     name: 'New Idle Resource',     desc: 'Adds an unutilized instance (0.3-0.4% CPU, 250-300h) triggering stop rec.' },
   { id: 'new_oversized_resource',name: 'New Oversized Resource',desc: 'Adds an underutilized instance (~3% CPU) triggering resize recommendation.' },
@@ -482,42 +483,78 @@ export default function LiveDataLab() {
               )}
             </div>
 
-            {/* 4. Savings Optimiser Card */}
+            {/* 4. Savings Optimiser Reaction Table */}
             <div style={{ border: '1px solid var(--border-subtle, rgba(255, 255, 255, 0.08))', borderRadius: 'var(--radius-md, 8px)', padding: '14px', background: 'var(--glass-bg, rgba(255, 255, 255, 0.02))' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, fontSize: '13px' }}>
                   <ShieldCheck size={16} color="var(--color-success, #10b981)" />
-                  <span>Savings Optimiser</span>
+                  <span>Savings Optimiser Reaction</span>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px' }}>
-                {after?.savings_optimiser?.map((svc, i) => {
-                  const bSvc = before?.savings_optimiser?.find(b => b.service === svc.service)
-                  const hasChanged = bSvc && bSvc.recommended !== svc.recommended
-                  const isNewPlan = !bSvc || Boolean(svc.is_new)
-                  return (
-                    <div
-                      key={i}
-                      style={{
-                        padding: '6px 8px',
-                        borderRadius: '4px',
-                        background: isNewPlan ? 'rgba(16, 185, 129, 0.12)' : hasChanged ? 'rgba(245, 158, 11, 0.15)' : 'rgba(255, 255, 255, 0.02)',
-                        border: isNewPlan ? '1px solid rgba(16, 185, 129, 0.3)' : hasChanged ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid var(--border-subtle, rgba(255, 255, 255, 0.05))'
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 600 }}>
-                        <span>{isNewPlan ? `New plan available: ${svc.service}` : `${svc.service}:`}</span>
-                        <span style={{ color: svc.recommended === 'pay_as_you_go' ? 'var(--color-warning, #f59e0b)' : 'var(--color-success, #10b981)' }}>
-                          {svc.recommended}
-                        </span>
-                      </div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-3)', marginTop: '2px', lineHeight: 1.3 }}>
-                        {svc.reason}
-                      </div>
-                    </div>
-                  )
-                })}
+              <div className="table-wrap">
+                <table className="data-table" style={{ fontSize: '12px' }}>
+                  <thead>
+                    <tr>
+                      <th>Service</th>
+                      <th>CV</th>
+                      <th>Trend</th>
+                      <th>Recommended Option</th>
+                      <th>Coverage %</th>
+                      <th>Why</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {after?.savings_optimiser?.map((svc, i) => {
+                      const bSvc = before?.savings_optimiser?.find(b => b.service === svc.service)
+                      const hasChanged = bSvc && bSvc.recommended !== svc.recommended
+                      const cvBefore = bSvc?.cv != null ? `${(bSvc.cv * 100).toFixed(1)}%` : '—'
+                      const cvAfter = svc.cv != null ? `${(svc.cv * 100).toFixed(1)}%` : '—'
+                      const trendStr = svc.trend_pct != null ? `${svc.trend_pct >= 0 ? '+' : ''}${svc.trend_pct.toFixed(1)}%` : '—'
+                      const covBefore = bSvc?.coverage_pct != null ? `${bSvc.coverage_pct}%` : '—'
+                      const covAfter = svc.coverage_pct != null ? `${svc.coverage_pct}%` : '—'
+
+                      return (
+                        <tr key={i} style={{ background: hasChanged ? 'rgba(245, 158, 11, 0.08)' : 'transparent' }}>
+                          <td style={{ fontWeight: 600 }}>{svc.service}</td>
+                          <td>
+                            {cvBefore !== cvAfter ? (
+                              <span>{cvBefore} &rarr; <strong style={{ color: svc.cv > 0.25 ? '#ef4444' : '#10b981' }}>{cvAfter}</strong></span>
+                            ) : (
+                              <span>{cvAfter}</span>
+                            )}
+                          </td>
+                          <td style={{ color: svc.trend_pct <= -10.0 ? '#ef4444' : 'inherit' }}>{trendStr}</td>
+                          <td>
+                            {bSvc && bSvc.recommended !== svc.recommended ? (
+                              <span>
+                                <span style={{ textDecoration: 'line-through', color: 'var(--text-4)' }}>{bSvc.recommended}</span>
+                                {' '}&rarr;{' '}
+                                <strong style={{ color: svc.recommended === 'pay_as_you_go' ? '#f59e0b' : '#10b981' }}>
+                                  {svc.preview_if_resolved ? 'Held: pay-as-you-go' : svc.recommended}
+                                </strong>
+                              </span>
+                            ) : (
+                              <strong style={{ color: svc.recommended === 'pay_as_you_go' ? '#f59e0b' : '#10b981' }}>
+                                {svc.preview_if_resolved ? 'Held: pay-as-you-go' : svc.recommended}
+                              </strong>
+                            )}
+                          </td>
+                          <td>
+                            {covBefore !== covAfter ? (
+                              <span>{covBefore} &rarr; <strong>{covAfter}</strong></span>
+                            ) : (
+                              <span>{covAfter}</span>
+                            )}
+                          </td>
+                          <td style={{ fontSize: '11px', color: 'var(--text-3)', maxWidth: '280px' }}>
+                            {svc.reason}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>

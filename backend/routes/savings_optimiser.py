@@ -5,8 +5,9 @@ Evaluates commitment options across eligible services (EC2, RDS, AzureVM).
 """
 
 import logging
-from datetime import datetime, timedelta
-from typing import Optional, List, Dict, Any
+import numpy as np
+from datetime import datetime, timedelta, date
+from typing import Optional, List, Dict, Any, Tuple
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -25,6 +26,15 @@ router = APIRouter(prefix="/savings-optimiser", tags=["Savings Optimiser"])
 
 LOOKBACK_DAYS = 14
 BREAK_EVEN_THRESHOLD_MONTHS = 8.0
+
+# Named dict for illustrative behavior heuristics as required
+ILLUSTRATIVE_BEHAVIOR_HEURISTICS = {
+    "STABILITY_STEADY_CV": 0.10,
+    "STABILITY_VOLATILE_CV": 0.25,
+    "TREND_DOWN_PCT": -0.10,
+    "FLOOR_PERCENTILE": 10,
+    "MIN_COVERAGE": 0.5,
+}
 
 # ONE named dict for illustrative plan option constants as required
 ILLUSTRATIVE_PLAN_CONSTANTS = {
@@ -62,6 +72,43 @@ ILLUSTRATIVE_PLAN_CONSTANTS = {
         "badge": "Illustrative (35% off)"
     }
 }
+
+
+def _evaluate_commitment_recommendation(
+    cv: float,
+    trend: float,
+    coverage_pct: int,
+    options_list: List[Dict[str, Any]]
+) -> Tuple[str, str]:
+    """Helper to evaluate recommendation rules 2, 3, 4 without anomaly hold."""
+    if cv > ILLUSTRATIVE_BEHAVIOR_HEURISTICS["STABILITY_VOLATILE_CV"] or trend <= ILLUSTRATIVE_BEHAVIOR_HEURISTICS["TREND_DOWN_PCT"]:
+        if cv > ILLUSTRATIVE_BEHAVIOR_HEURISTICS["STABILITY_VOLATILE_CV"]:
+            why = f"Volatile usage (CV {int(round(cv*100))}% > 25%); zero-upfront commitment covers only the stable {coverage_pct}% floor, leaving peak usage on PAYG"
+        else:
+            why = f"Declining trend ({round(trend*100, 1):+.1f}%/mo <= -10%); zero-upfront commitment covers only the stable {coverage_pct}% floor without capital lock-in"
+        return "1y_no_upfront", why
+
+    if cv <= ILLUSTRATIVE_BEHAVIOR_HEURISTICS["STABILITY_STEADY_CV"] and trend > ILLUSTRATIVE_BEHAVIOR_HEURISTICS["TREND_DOWN_PCT"]:
+        qualifying = [
+            opt for opt in options_list
+            if opt["id"] != "pay_as_you_go" and opt["break_even_months"] <= BREAK_EVEN_THRESHOLD_MONTHS
+        ]
+        if qualifying:
+            best_opt = max(qualifying, key=lambda x: x["saving_vs_payg_12m"])
+            why = (
+                f"Steady usage (CV {int(round(cv*100))}% <= 10%); provides highest net savings "
+                f"(${best_opt['saving_vs_payg_12m']:.2f}) with break-even of {best_opt['break_even_months']:.1f} mo "
+                f"on {coverage_pct}% coverage"
+            )
+            return best_opt["id"], why
+        return "pay_as_you_go", "No commitment plan achieves break-even within the 8.0-month threshold."
+
+    # Moderate (0.10 < cv <= 0.25)
+    why = (
+        f"Moderate usage variation (CV {int(round(cv*100))}%); partial upfront balances savings "
+        f"and flexibility across the stable {coverage_pct}% commitment floor"
+    )
+    return "1y_partial_upfront", why
 
 
 def _check_account_access(db: Session, current_user: User, account_id: Optional[str]) -> CloudAccount:
@@ -163,7 +210,7 @@ def compute_savings_plans(db: Session, account: CloudAccount) -> Dict[str, Any]:
         ).first() is not None
         is_new = bool(has_injected)
 
-        # Services with no commitment product (e.g. S3, Lambda)
+        # Services with no commitment product (e.g. S3, Lambda, AzureBlob, AzureFunctions)
         if srv not in base_eligible:
             if srv in forecast_map:
                 baseline_monthly = round(forecast_map[srv], 2)
@@ -181,10 +228,16 @@ def compute_savings_plans(db: Session, account: CloudAccount) -> Dict[str, Any]:
             services_output.append({
                 "service": srv,
                 "baseline_monthly": baseline_monthly,
+                "cv": None,
+                "trend_pct": None,
+                "coverage_pct": 0,
+                "committed_monthly": 0.0,
+                "uncommitted_monthly": baseline_monthly,
                 "options": {},
                 "options_list": [],
                 "recommended": "No commitment option for this service",
                 "reason": "No commitment option for this service",
+                "preview_if_resolved": None,
                 "cash_note": "No upfront cash required",
                 "right_size_first_note": None,
                 "is_new": is_new,
@@ -195,30 +248,83 @@ def compute_savings_plans(db: Session, account: CloudAccount) -> Dict[str, Any]:
 
         existing_rec = existing_map.get(srv)
 
+        # Pull the last 30 daily cost records
+        recent_records = (
+            db.query(CostRecord)
+            .filter(
+                CostRecord.account_id == account.id,
+                CostRecord.service_type == srv
+            )
+            .order_by(CostRecord.record_date.desc())
+            .limit(30)
+            .all()
+        )
+
+        # Unresolved anomalies for this service
+        srv_unresolved_anoms = [
+            a for a in recent_anomalies
+            if a.service_type == srv and a.is_resolved == False
+        ]
+        unresolved_dates = {a.record_date for a in srv_unresolved_anoms}
+
+        # Exclude any dates that fall in an active (unresolved) anomaly window for that service
+        clean_records = [r for r in recent_records if r.record_date not in unresolved_dates]
+        clean_records.sort(key=lambda x: x.record_date)
+        clean_daily_costs = [float(r.daily_cost_usd) for r in clean_records]
+
         # Determine baseline_monthly
-        if existing_rec:
-            # Derive baseline from existing recommendation to ensure 100% exact reproduction
-            disc = 0.25 if srv in ["AzureVM", "AzureSQL"] else 0.30
-            upfront_p = 0.50
-            baseline_monthly = round(existing_rec.upfront_cost_usd / (12.0 * upfront_p * (1.0 - disc)), 2)
+        if srv in forecast_map and forecast_map[srv] > 0:
+            baseline_monthly = round(forecast_map[srv], 2)
+        elif clean_daily_costs:
+            baseline_monthly = round(float(np.mean(clean_daily_costs)) * 30.0, 2)
         else:
-            baseline_monthly = round(forecast_map.get(srv, 0.0), 2)
+            baseline_monthly = 0.0
 
-        # Check skip conditions matching existing optimiser
-        skipped = False
-        skip_reason = ""
-        if srv in anomalous_services:
-            skipped = True
-            skip_reason = f"Recent unresolved cost anomaly detected in {srv} within the last 14 days."
-        elif baseline_monthly < 50.0:
-            skipped = True
-            skip_reason = f"Baseline monthly spend (${baseline_monthly:.2f}) is below the $50 minimum threshold for commitment plans."
-        elif not has_history:
-            skipped = True
-            skip_reason = "Insufficient historical usage to generate a reliable commitment baseline."
+        # Behavioral heuristics & options
+        if len(clean_daily_costs) < 14:
+            is_new = True
+            cv_val = round(float(np.std(clean_daily_costs, ddof=1) / np.mean(clean_daily_costs)), 3) if len(clean_daily_costs) > 1 and np.mean(clean_daily_costs) > 0 else 0.0
+            trend_val = 0.0
+            coverage = 0.0
+            coverage_pct = 0
+            committed_monthly = 0.0
+            uncommitted_monthly = baseline_monthly
+            recommended = "pay_as_you_go"
+            reason = "Fewer than 14 days of stable history; observe usage before committing"
+            preview_if_resolved = None
+            cash_note = "No upfront cash required"
+        else:
+            std = float(np.std(clean_daily_costs, ddof=1))
+            mean = float(np.mean(clean_daily_costs))
+            cv_raw = std / mean if mean > 0 else 0.0
+            cv_val = round(float(cv_raw), 3)
 
-        # Compute Options
-        # Option 1: pay_as_you_go
+            forecast_30d = forecast_map.get(srv)
+            current_run_rate_30d = mean * 30.0
+            if forecast_30d is not None and current_run_rate_30d > 0:
+                trend_raw = (forecast_30d / current_run_rate_30d) - 1.0
+            else:
+                x = np.arange(len(clean_daily_costs))
+                slope, _ = np.polyfit(x, clean_daily_costs, 1)
+                trend_raw = (slope * 30.0) / (current_run_rate_30d or 1.0)
+            trend_val = round(float(trend_raw * 100.0), 1)
+
+            stable_floor_daily = float(np.percentile(clean_daily_costs, ILLUSTRATIVE_BEHAVIOR_HEURISTICS["FLOOR_PERCENTILE"]))
+            stable_floor_monthly = stable_floor_daily * 30.0
+            coverage = max(
+                ILLUSTRATIVE_BEHAVIOR_HEURISTICS["MIN_COVERAGE"],
+                min(1.0, stable_floor_monthly / (baseline_monthly or 1.0))
+            )
+            coverage_pct = int(round(coverage * 100))
+            committed_monthly = round(baseline_monthly * coverage, 2)
+            uncommitted_monthly = round(baseline_monthly * (1.0 - coverage), 2)
+
+        # Plan options calculated on committed_monthly ONLY; uncommitted_monthly stays on PAYG
+        disc_no = ILLUSTRATIVE_PLAN_CONSTANTS["1y_no_upfront"]["discount_pct"]
+        disc_part = 0.25 if srv in ["AzureVM", "AzureSQL"] else 0.30
+        disc_all = ILLUSTRATIVE_PLAN_CONSTANTS["1y_all_upfront"]["discount_pct"]
+
+        # Option 1: PAYG
         payg = {
             "id": "pay_as_you_go",
             "name": "Pay As You Go",
@@ -228,78 +334,69 @@ def compute_savings_plans(db: Session, account: CloudAccount) -> Dict[str, Any]:
             "total_12m": round(baseline_monthly * 12.0, 2),
             "saving_vs_payg_12m": 0.0,
             "break_even_months": 0.0,
-            "discount_pct": 0.0,
+            "discount_pct": 0,
             "is_illustrative": False
         }
 
-        # Option 2: 1y_no_upfront (20% discount, 0 upfront)
-        no_upfront_disc = ILLUSTRATIVE_PLAN_CONSTANTS["1y_no_upfront"]["discount_pct"]
-        no_upfront_monthly = round(baseline_monthly * (1.0 - no_upfront_disc), 2)
-        no_upfront_total = round(no_upfront_monthly * 12.0, 2)
-        no_upfront_savings_12m = round((baseline_monthly * 12.0) - no_upfront_total, 2)
+        # Option 2: 1y_no_upfront
+        comm_monthly_no = committed_monthly * (1.0 - disc_no)
+        total_monthly_no = round(comm_monthly_no + uncommitted_monthly, 2)
+        saving_monthly_no = round(baseline_monthly - total_monthly_no, 2)
+        total_12m_no = round(total_monthly_no * 12.0, 2)
+        saving_12m_no = round((baseline_monthly * 12.0) - total_12m_no, 2)
         opt_no_upfront = {
             "id": "1y_no_upfront",
             "name": "1-Year No Upfront",
             "upfront_cash": 0.0,
-            "monthly_payment": no_upfront_monthly,
-            "monthly_saving": round(baseline_monthly - no_upfront_monthly, 2),
-            "total_12m": no_upfront_total,
-            "saving_vs_payg_12m": no_upfront_savings_12m,
+            "monthly_payment": total_monthly_no,
+            "monthly_saving": saving_monthly_no,
+            "total_12m": total_12m_no,
+            "saving_vs_payg_12m": saving_12m_no,
             "break_even_months": 0.0,
-            "discount_pct": int(no_upfront_disc * 100),
+            "discount_pct": int(disc_no * 100),
             "is_illustrative": True
         }
 
-        # Option 3: 1y_partial_upfront (reproduces existing recommendation exactly)
-        part_disc = 0.25 if srv in ["AzureVM", "AzureSQL"] else 0.30
-        if existing_rec:
-            part_upfront_cash = round(existing_rec.upfront_cost_usd, 2)
-            part_monthly_saving = round(existing_rec.potential_savings_usd, 2)
-            part_monthly_payment = round(baseline_monthly - part_monthly_saving, 2)
-            part_total_12m = round(part_upfront_cash + (part_monthly_payment * 12.0), 2)
-            part_savings_12m = round((baseline_monthly * 12.0) - part_total_12m, 2)
-            part_break_even = round(part_upfront_cash / part_monthly_saving, 1) if part_monthly_saving > 0 else 0.0
-        else:
-            discounted_30d = baseline_monthly * (1.0 - part_disc)
-            part_monthly_payment = round(discounted_30d * 0.50, 2)
-            part_upfront_cash = round(discounted_30d * 12.0 * 0.50, 2)
-            part_monthly_saving = round(baseline_monthly - part_monthly_payment, 2)
-            part_total_12m = round(part_upfront_cash + (part_monthly_payment * 12.0), 2)
-            part_savings_12m = round((baseline_monthly * 12.0) - part_total_12m, 2)
-            part_break_even = round(part_upfront_cash / part_monthly_saving, 1) if part_monthly_saving > 0 else 0.0
-
+        # Option 3: 1y_partial_upfront
+        comm_total_12m_part = committed_monthly * (1.0 - disc_part) * 12.0
+        upfront_part = round(comm_total_12m_part * 0.50, 2)
+        comm_monthly_part = (comm_total_12m_part * 0.50) / 12.0
+        total_monthly_part = round(comm_monthly_part + uncommitted_monthly, 2)
+        saving_monthly_part = round(baseline_monthly - total_monthly_part, 2)
+        total_12m_part = round(upfront_part + (total_monthly_part * 12.0), 2)
+        saving_12m_part = round((baseline_monthly * 12.0) - total_12m_part, 2)
+        be_part = round(upfront_part / saving_monthly_part, 1) if saving_monthly_part > 0 else 0.0
         opt_partial_upfront = {
             "id": "1y_partial_upfront",
             "name": "1-Year Partial Upfront",
-            "upfront_cash": part_upfront_cash,
-            "monthly_payment": part_monthly_payment,
-            "monthly_saving": part_monthly_saving,
-            "total_12m": part_total_12m,
-            "saving_vs_payg_12m": part_savings_12m,
-            "break_even_months": part_break_even,
-            "discount_pct": int(part_disc * 100),
+            "upfront_cash": upfront_part,
+            "monthly_payment": total_monthly_part,
+            "monthly_saving": saving_monthly_part,
+            "total_12m": total_12m_part,
+            "saving_vs_payg_12m": saving_12m_part,
+            "break_even_months": be_part,
+            "discount_pct": int(disc_part * 100),
             "is_illustrative": False
         }
 
-        # Option 4: 1y_all_upfront (35% discount, 100% upfront)
-        all_disc = ILLUSTRATIVE_PLAN_CONSTANTS["1y_all_upfront"]["discount_pct"]
-        discounted_30d_all = baseline_monthly * (1.0 - all_disc)
-        all_upfront_cash = round(discounted_30d_all * 12.0, 2)
-        all_monthly_payment = 0.0
-        all_total_12m = all_upfront_cash
-        all_savings_12m = round((baseline_monthly * 12.0) - all_total_12m, 2)
-        all_break_even = round(all_upfront_cash / baseline_monthly, 1) if baseline_monthly > 0 else 0.0
-
+        # Option 4: 1y_all_upfront
+        comm_total_12m_all = committed_monthly * (1.0 - disc_all) * 12.0
+        upfront_all = round(comm_total_12m_all, 2)
+        total_monthly_all = round(uncommitted_monthly, 2)
+        saving_monthly_all = round(baseline_monthly - total_monthly_all, 2)
+        total_12m_all = round(upfront_all + (total_monthly_all * 12.0), 2)
+        saving_12m_all = round((baseline_monthly * 12.0) - total_12m_all, 2)
+        be_all = round(upfront_all / saving_monthly_all, 1) if saving_monthly_all > 0 else 0.0
         opt_all_upfront = {
             "id": "1y_all_upfront",
             "name": "1-Year All Upfront",
-            "upfront_cash": all_upfront_cash,
-            "monthly_payment": all_monthly_payment,
-            "monthly_saving": round(baseline_monthly, 2),
-            "total_12m": all_total_12m,
-            "saving_vs_payg_12m": all_savings_12m,
-            "break_even_months": all_break_even,
-            "discount_pct": int(all_disc * 100),
+            "upfront_cash": upfront_all,
+            "monthly_payment": total_monthly_all,
+            "monthly_saving": saving_monthly_all,
+            "total_12m": total_12m_all,
+            "saving_vs_payg_12m": saving_12m_all,
+            "break_even_months": be_all,
+            "discount_pct": int(disc_all * 100),
             "is_illustrative": True
         }
 
@@ -309,33 +406,43 @@ def compute_savings_plans(db: Session, account: CloudAccount) -> Dict[str, Any]:
             "1y_partial_upfront": opt_partial_upfront,
             "1y_all_upfront": opt_all_upfront
         }
-
         options_list = [payg, opt_no_upfront, opt_partial_upfront, opt_all_upfront]
 
-        # Recommendation logic
-        if skipped:
-            recommended = "pay_as_you_go"
-            reason = skip_reason
-            cash_note = "No upfront cash required"
-        else:
-            # Filter options with break_even <= 8.0
-            qualifying = [
-                opt for opt in options_list
-                if opt["id"] != "pay_as_you_go" and opt["break_even_months"] <= BREAK_EVEN_THRESHOLD_MONTHS
+        # Recommendation rules (precedence order)
+        if len(clean_daily_costs) >= 14:
+            # 1. Active (unresolved) anomaly in the last 14 days on this service
+            active_14d_anoms = [
+                a for a in srv_unresolved_anoms
+                if a.record_date and (date.today() - a.record_date).days <= 14
             ]
-            if qualifying:
-                best_opt = max(qualifying, key=lambda x: x["saving_vs_payg_12m"])
-                recommended = best_opt["id"]
-                reason = (
-                    f"Provides the highest 12-month net savings (${best_opt['saving_vs_payg_12m']:.2f}) "
-                    f"with a payback period of {best_opt['break_even_months']:.1f} months "
-                    f"(<= {BREAK_EVEN_THRESHOLD_MONTHS} months threshold)."
-                )
-                cash_note = f"requires ${best_opt['upfront_cash']:.2f} today" if best_opt["upfront_cash"] > 0 else "No upfront cash required"
-            else:
+            if active_14d_anoms:
+                latest_anom = max(active_14d_anoms, key=lambda x: x.record_date)
+                act_c = float(latest_anom.actual_cost) if latest_anom.actual_cost is not None else 0.0
+                exp_c = float(latest_anom.forecast_cost) if latest_anom.forecast_cost is not None else 0.0
+                diff_usd = max(0.0, float(latest_anom.residual if latest_anom.residual is not None else (act_c - exp_c)))
+                diff_pct = ((act_c / exp_c) - 1.0) * 100.0 if exp_c > 0 else 0.0
                 recommended = "pay_as_you_go"
-                reason = "No commitment plan achieves break-even within the 8.0-month threshold."
+                reason = f"Recent unaddressed anomaly on {latest_anom.record_date} (+${diff_usd:.2f} / +{diff_pct:.1f}%). Resolve before committing."
+                prev_rec, prev_why = _evaluate_commitment_recommendation(cv_val, trend_val / 100.0, coverage_pct, options_list)
+                preview_if_resolved = {
+                    "recommended": prev_rec,
+                    "coverage": coverage_pct,
+                    "reason": prev_why
+                }
                 cash_note = "No upfront cash required"
+            elif baseline_monthly < 50.0:
+                recommended = "pay_as_you_go"
+                reason = f"Baseline monthly spend (${baseline_monthly:.2f}) is below the $50 minimum threshold for commitment plans."
+                preview_if_resolved = None
+                cash_note = "No upfront cash required"
+            else:
+                recommended, reason = _evaluate_commitment_recommendation(cv_val, trend_val / 100.0, coverage_pct, options_list)
+                preview_if_resolved = None
+                rec_opt = next((o for o in options_list if o["id"] == recommended), None)
+                if rec_opt and rec_opt["upfront_cash"] > 0:
+                    cash_note = f"requires ${rec_opt['upfront_cash']:.2f} today"
+                else:
+                    cash_note = "No upfront cash required"
 
         # Right-size first note
         unresolved_non_commit = non_commit_map.get(srv, 0.0)
@@ -347,10 +454,16 @@ def compute_savings_plans(db: Session, account: CloudAccount) -> Dict[str, Any]:
         services_output.append({
             "service": srv,
             "baseline_monthly": baseline_monthly,
+            "cv": cv_val,
+            "trend_pct": trend_val,
+            "coverage_pct": coverage_pct,
+            "committed_monthly": committed_monthly,
+            "uncommitted_monthly": uncommitted_monthly,
             "options": options_dict,
             "options_list": options_list,
             "recommended": recommended,
             "reason": reason,
+            "preview_if_resolved": preview_if_resolved,
             "cash_note": cash_note,
             "right_size_first_note": right_size_first_note,
             "is_new": is_new,

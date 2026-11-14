@@ -43,3 +43,5 @@
 18. **New-Service Commitment Injection**: In **Live Data Lab**, inject `new_service` with cost history to observe instant detection of eligible commitment plans and badges in the Savings Optimiser.
 19. **Non-Commitment Product Handling**: Injecting uncommitted services like S3 or Lambda correctly displays "No commitment option for this service" without inventing unrealistic commitment plans.
 20. **Notification Bell**: Click the TopBar notification bell to review unread alerts across anomalies, recommendations, and guided remediation actions with quick deep-links.
+21. **Multi-Service Azure Demo**: In Demo Azure, observe unified coverage across AzureVM, AzureSQL, AzureBlob, and AzureFunctions with realistic cleanup recommendations, What-If resource actions, and service-level cost attribution.
+22. **Usage-Reactive Savings Optimiser**: Evaluate stability (CV), run-rate trends, and stable floor coverage in the Savings Optimiser; inject volatile usage or anomalies in Live Data Lab to see plans dynamically shift to zero-upfront or hold on PAYG.
