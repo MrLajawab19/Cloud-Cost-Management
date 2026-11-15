@@ -200,6 +200,10 @@ for svc in data_b_aws["services"]:
     assert svc["recommended"] in ("1y_all_upfront", "1y_partial_upfront", "1y_no_upfront", "pay_as_you_go")
     assert svc["reason"]
 
+    # Check that commitment plan options generate valid savings
+    part_opt = svc["options"]["1y_partial_upfront"]
+    assert part_opt["monthly_saving"] > 0
+    assert part_opt["upfront_cash"] > 0
     # Strict equality check against existing recommendation when coverage is 1.0 (100%)
     existing_rec = db.query(Recommendation).filter(
         Recommendation.account_id == demo_aws.id,

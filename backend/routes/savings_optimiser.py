@@ -260,6 +260,7 @@ def compute_savings_plans(db: Session, account: CloudAccount) -> Dict[str, Any]:
             .all()
         )
 
+        # Unresolved anomalies for this service
         # All anomalies for this service (resolved or unresolved) in lookback window
         srv_anom_dates = {
             a.record_date for a in db.query(Anomaly).filter(
@@ -274,7 +275,10 @@ def compute_savings_plans(db: Session, account: CloudAccount) -> Dict[str, Any]:
             a for a in recent_anomalies
             if a.service_type == srv and a.is_resolved == False
         ]
+        unresolved_dates = {a.record_date for a in srv_unresolved_anoms}
 
+        # Exclude any dates that fall in an active (unresolved) anomaly window for that service
+        clean_records = [r for r in recent_records if r.record_date not in unresolved_dates]
         # Exclude any dates that fall in an anomaly window for that service (non-anomalous baseline)
         clean_records = [r for r in recent_records if r.record_date not in srv_anom_dates]
         clean_records.sort(key=lambda x: x.record_date)
@@ -319,6 +323,10 @@ def compute_savings_plans(db: Session, account: CloudAccount) -> Dict[str, Any]:
 
             stable_floor_daily = float(np.percentile(clean_daily_costs, ILLUSTRATIVE_BEHAVIOR_HEURISTICS["FLOOR_PERCENTILE"]))
             stable_floor_monthly = stable_floor_daily * 30.0
+            coverage = max(
+                ILLUSTRATIVE_BEHAVIOR_HEURISTICS["MIN_COVERAGE"],
+                min(1.0, stable_floor_monthly / (baseline_monthly or 1.0))
+            )
 
             # Steady usage (CV <= 0.10 and trend > -0.10) commits full baseline (100% coverage).
             # Fluctuating, declining, or volatile usage scales commitment to the stable floor (min 50%, max 100%).
