@@ -158,8 +158,8 @@ def run_tests():
     assert len(status_data["escalations"]) == 1
     esc_item = status_data["escalations"][0]
     assert esc_item["status"] == "pending"
-    assert esc_item["held"] is False
-    assert esc_item["held_reason"] is None
+    assert esc_item["held"] is True
+    assert esc_item["held_reason"] == "Unresolved anomaly on EC2 within 14 days"
     assert esc_item["hours_remaining"] > 0
 
     # Advance time past due_at

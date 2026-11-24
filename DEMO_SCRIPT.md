@@ -45,3 +45,4 @@
 20. **Notification Bell**: Click the TopBar notification bell to review unread alerts across anomalies, recommendations, and guided remediation actions with quick deep-links.
 21. **Multi-Service Azure Demo**: In Demo Azure, observe unified coverage across AzureVM, AzureSQL, AzureBlob, and AzureFunctions with realistic cleanup recommendations, What-If resource actions, and service-level cost attribution.
 22. **Usage-Reactive Savings Optimiser**: Evaluate stability (CV), run-rate trends, and stable floor coverage in the Savings Optimiser; inject volatile usage or anomalies in Live Data Lab to see plans dynamically shift to zero-upfront or hold on PAYG.
+23. **Azure VM Guided Remediation**: In Demo Azure, Idle AzureVM (stop) and Underutilized AzureVM (resize) enter Guided Remediation with grace period tracking, FR-7.6 anomaly hold, and manual accept/complete workflows identical to EC2.

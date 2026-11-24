@@ -150,7 +150,7 @@ def generate_recommendations(db: Session) -> int:
                             issue="Idle AzureVM",
                             desc=f"Azure VM {r.resource_name} ({r.resource_type}) is completely idle.",
                             action="Stop the instance.",
-                            remediation_type="manual",
+                            remediation_type="stop",
                             severity=_severity(cost),
                             savings=cost)
                     elif 1.0 <= cpu < 5.0:
@@ -158,7 +158,7 @@ def generate_recommendations(db: Session) -> int:
                             issue="Underutilized AzureVM",
                             desc=f"Azure VM {r.resource_name} ({r.resource_type}) is underutilized.",
                             action="Consider downsizing to a smaller instance type.",
-                            remediation_type="manual",
+                            remediation_type="resize",
                             severity=_severity(cost),
                             savings=round(cost * 0.6, 2))
 
@@ -311,6 +311,24 @@ def _upsert_rec(db: Session, keys_set: set, r: Resource, issue: str, desc: str, 
         existing.severity = severity
         existing.potential_savings_usd = savings
         existing.remediation_type = remediation_type
+        if remediation_type == "stop":
+            from models.account import CloudAccount
+            from datetime import timedelta
+            rec_fk = format_recommendation_id_fk(existing.id, db)
+            esc_exists = db.query(EscalationState).filter(
+                (EscalationState.recommendation_id == rec_fk) |
+                (EscalationState.recommendation_id == str(existing.id))
+            ).first()
+            if not esc_exists:
+                account = db.query(CloudAccount).filter(CloudAccount.id == r.account_id).first()
+                grace_hours = account.grace_period_hours if account else 48
+                escalation = EscalationState(
+                    id=str(uuid.uuid4()),
+                    recommendation_id=rec_fk,
+                    status="pending",
+                    due_at=datetime.utcnow() + timedelta(hours=grace_hours)
+                )
+                db.add(escalation)
     else:
         # Create new
         new_rec = Recommendation(

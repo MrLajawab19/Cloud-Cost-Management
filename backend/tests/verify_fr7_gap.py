@@ -117,6 +117,12 @@ def main():
     res_id_2 = "i-abort-test-123"
 
     # Cleanup prior runs
+    prior_recs_2 = db.query(Recommendation).filter_by(resource_id=res_id_2).all()
+    prior_fks_2 = [format_recommendation_id_fk(r.id, db) for r in prior_recs_2] + [str(r.id) for r in prior_recs_2]
+    if prior_fks_2:
+        db.query(EscalationState).filter(
+            EscalationState.recommendation_id.in_(prior_fks_2)
+        ).delete(synchronize_session=False)
     db.query(Recommendation).filter_by(resource_id=res_id_2).delete()
     db.query(Anomaly).filter_by(account_id=account.id, service_type="EC2").delete()
     db.commit()

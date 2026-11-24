@@ -50,6 +50,9 @@ def get_remediation_status(
     if not account_ids:
         return {"escalations": [], "logs": []}
 
+    from services.escalation_manager import process_auto_resizes
+    process_auto_resizes(db)
+
     # Fetch recommendations for these accounts
     recs = db.query(Recommendation).filter(Recommendation.account_id.in_(account_ids)).all()
     rec_map = {}
@@ -82,8 +85,10 @@ def get_remediation_status(
             continue
 
         is_past_due = now >= esc.due_at
-        anomaly = check_anomaly_exclusion(db, rec.account_id, rec.service_type) if is_past_due else None
-        held = bool(is_past_due and anomaly is not None)
+        anomaly = None
+        if rec.remediation_type == "stop" or esc.status in ["pending", "escalated", "action_due"]:
+            anomaly = check_anomaly_exclusion(db, rec.account_id, rec.service_type)
+        held = bool(anomaly is not None)
         held_reason = (
             f"Unresolved anomaly on {rec.service_type} within 14 days"
             if held

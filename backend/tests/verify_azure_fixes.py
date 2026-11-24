@@ -21,6 +21,7 @@ from models.user import User
 from models.account import CloudAccount
 from models.resource import Resource
 from models.cost_record import CostRecord, Recommendation
+from models.remediation import EscalationState
 from services import azure_collector
 from services.cost_estimator import upsert_resources
 from services.cleanup_advisor import generate_recommendations
@@ -82,6 +83,7 @@ def test_azure_fixes():
 
     for tc in test_cases:
         # Reset DB tables
+        db.query(EscalationState).delete()
         db.query(Recommendation).delete()
         db.query(Resource).delete()
         db.commit()
@@ -282,6 +284,7 @@ def test_azure_cost_handling():
         print(f"  Test 2: 0 CostRecord rows written for None daily_cost (PASSED)")
 
         # Verify cleanup_advisor skips VM with None cost
+        db.query(EscalationState).delete()
         db.query(Recommendation).delete()
         db.query(Resource).filter(Resource.resource_id == "vm-preserve").delete()
         db.commit()

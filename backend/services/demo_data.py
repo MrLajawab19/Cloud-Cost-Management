@@ -641,8 +641,10 @@ def reset_demo_account(db: Session, acc: CloudAccount):
     from services.cleanup_advisor import generate_recommendations
     from services.savings_plan_optimiser import generate_sp_recommendations
     from services.anomaly_detector import detect_anomalies
+    from services.escalation_manager import process_auto_resizes
 
     generate_recommendations(db)
     generate_sp_recommendations(db, acc_id)
     detect_anomalies(db, [acc_id])
+    process_auto_resizes(db)
     db.commit()
